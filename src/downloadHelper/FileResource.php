@@ -1,40 +1,73 @@
 <?php
 namespace mangelp\downloadHelper;
 
-class FileResource extends AbstractResource implements IDownloadableResource {
+class FileResource implements IDownloadableResource {
     
     /**
      * @var string
      */
-    private $fileName = null;
+    private $filePath = null;
 
     /**
      * Gets
      * @return string
      */
     public function getFileName()  {
-        return $this->fileName;
+        return $this->filePath;
     }
     
-    private $fd;
-    private $size;
+    private $fd = null;
+    private $size = 0;
     
     public function getSize() {
         return $this->size;
     }
     
-    public function __construct($fileName) {
+    /**
+     * @var int
+     */
+    private $chunkSize = 1024*8;
+
+    /**
+     * Gets the maximum number of bytes read from the file
+     * @return int
+     */
+    public function getChunkSize()  {
+        return $this->chunkSize;
+    }
+
+    /**
+     * Sets the maximum number of bytes read from the file
+     * @param int $chunkSize
+     */
+    public function setChunkSize($chunkSize) {
+        $this->chunkSize = (int)$chunkSize;
+    }
+    
+    /**
+     * Initiallizes the path to the file and reads the file size.
+     *
+     * If the file size cannot be read a RuntimeException will be thrown.
+     *
+     * @param string $filePath
+     * @throws \RuntimeException If the file size cannot be read and so the file does not exists
+     * or is not accesible.
+     */
+    public function __construct($filePath) {
         
-        $size = filesize($fileName);
+        $size = filesize($filePath);
         
         if ($size === false) {
-            throw new \RuntimeException("Could not read from file: $fileName");
+            throw new \RuntimeException("Could not read from file: $filePath");
         }
         
         $this->size = $size;
-        $this->fileName = $fileName;
+        $this->filePath = $filePath;
     }
     
+    /**
+     * Closes the file descriptor and clears it
+     */
     public function __destruct() {
         if ($this->fd) {
             fclose($this->fd);
@@ -42,17 +75,28 @@ class FileResource extends AbstractResource implements IDownloadableResource {
         }
     }
     
+    /**
+     * Ensures that the file descriptor is ready to be used
+     * @throws \RuntimeException If the file cannot be read
+     */
     protected function ensureOpen() {
-        if (!$this->fd) {
-            $this->fd = fopen($this->fileName, 'rb');
+        if ($this->fd) {
+            return;
         }
+        
+        $this->fd = fopen($this->filePath, 'rb');
         
         if ($this->fd === false) {
             throw new \RuntimeException("Could not open file for reading: $fileName");
         }
     }
     
-    public function readBytes($startOffset, $length) {
+    /**
+     *
+     * {@inheritDoc}
+     * @see \mangelp\downloadHelper\IDownloadableResource::readBytes()
+     */
+    public function readBytes($startOffset = 0, $length = null) {
         $this->ensureOpen();
         
         $startOffset = (int)$startOffset;
@@ -70,7 +114,32 @@ class FileResource extends AbstractResource implements IDownloadableResource {
             return false;
         }
         
-        $data = fread($this->fd, $length);
+        $data = false;
+        
+        if ($this->chunkSize === null || $this->chunkSize >= $length) {
+            $data = fread($this->fd, $length);
+        }
+        else {
+            $readSize = 0;
+            $readData = true;
+            
+            while($readSize < $length && $readData !== false) {
+                $readData = fread($this->fd, $this->chunkSize);
+                
+                if ($readData === false) {
+                    break;
+                }
+                
+                if ($data) {
+                    $data .= $readData;
+                }
+                else {
+                    $data = $readData;
+                }
+                
+                $readSize += strlen($readData);
+            }
+        }
         
         return $data;
     }
