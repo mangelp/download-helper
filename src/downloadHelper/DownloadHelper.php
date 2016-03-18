@@ -100,6 +100,12 @@ class DownloadHelper {
     public function __construct() {
     }
     
+    /**
+     * Performs the generation of an HTTP response that returns a given resource to the client that
+     * should handle it and either download or open it.
+     *
+     * @throws \RuntimeException
+     */
     public function download() {
         
         if (empty($this->resource)) {
@@ -113,6 +119,11 @@ class DownloadHelper {
         $this->outputEnd();
     }
     
+    /**
+     * Disables all output buffers
+     *
+     * @throws \RuntimeException If headers have been already sent
+     */
     protected function disableOutputBuffering() {
         if (headers_sent()) {
             throw new \RuntimeException('Headers already sent, cannot start a download.');
@@ -130,66 +141,67 @@ class DownloadHelper {
         
     }
     
+    /**
+     * Outputs a first set of headers needed for the download.
+     * The method DownloadHelper::outputRangeHeaders() must be also called to output download
+     * specific headers if the client specified a range request.
+     */
     protected function outputHeaders() {
-        header("Pragma: public");
-        header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+        header('Pragma: public');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
         
         if ($this->byteRangesEnabled) {
-            header("Accept-Ranges: bytes");
+            header('Accept-Ranges: bytes');
         }
     }
     
+    /**
+     * Outputs the headers to return a single data range. Multiple data ranges are not supported
+     * @param int $start
+     * @param int $end
+     */
     protected function outputRangeHeaders($start, $end) {
         header('HTTP/1.1 206 Partial Content');
         header('Accept-Ranges: bytes');
-        header("Content-Range: bytes $start-$end/" . $this->resource->getSize());
+        header('Content-Range: bytes ' . ($start - $end) . '/' . $this->resource->getSize());
         $contentLength = $end - $start + 1;
-        header("Content-Length: $contentLength");
+        header('Content-Length: ' . $contentLength);
     }
     
-    protected function sendErrorBadRange() {
+    /**
+     * Outputs the bad range header
+     */
+    protected function outputBadRangeHeader() {
         header('HTTP/1.1 416 Requested Range Not Satisfiable');
     }
     
+    /**
+     * Processes the existing HTTP_RANGE server header and returns the ranges as an array where each
+     * item has an start and length keys for both the start byte offset and the number of bytes to
+     * retrieve from the start offset.
+     *
+     * @return array Ranges array
+     */
     protected function getRanges() {
         if (!$this->byteRangesEnabled || !isset($_SERVER['HTTP_RANGE'])) {
             return false;
         }
         
-        $parts = explode(',', $_SERVER['HTTP_RANGE']);
-        $ranges = [];
+        $rangeHeaderHelper = new HttpRangeHeaderHelper();
+        $ranges = $rangeHeaderHelper->parseRangeHeader();
         
-        foreach($parts as $part) {
-            if ($part == '-') {
-                $this->sendErrorBadRange();
-                return false;
-            }
-            
-            if ($part[0] == '-') {
-                $part = "0$part";
-            }
-            
-            if ($part[strlen($part) - 1] == '-') {
-                $part .= "" . $this->size - 1;
-            }
-            
-            $rangeParts = explode('-', $part);
-            
-            if (count($rangeParts) != 2) {
-                $this->sendErrorBadRange();
-                return false;
-            }
-            
-            $ranges[]= ['start' => $rangeParts[0], 'length' => $rangeParts[1] - $rangeParts[0] + 1];
+        if ($ranges === false) {
+            $this->outputBadRangeHeader();
+            $this->outputEnd();
         }
-        
-        usort($ranges, function($a, $b){
-            return ($a['start'] - $b['start']) % 2;
-        });
         
         return $ranges;
     }
     
+    /**
+     * Outputs the data
+     */
     protected function outputData() {
         set_time_limit(0);
         $offset = 0;
@@ -199,6 +211,11 @@ class DownloadHelper {
         }
         else {
             $ranges = [['start' => 0, 'length' => $this->size]];
+        }
+        
+        if (count($ranges) != 1) {
+            $this->outputBadRangeHeader();
+            $this->outputEnd();
         }
 
         $pos = 0;
@@ -222,7 +239,12 @@ class DownloadHelper {
         }
     }
     
+    /**
+     * Flushes all buffers and ends the script.
+     */
     protected function outputEnd() {
-        
+        ob_flush();
+        flush();
+        die();
     }
 }

@@ -29,7 +29,7 @@ class FileResource implements IDownloadableResource {
     private $chunkSize = 1024*8;
 
     /**
-     * Gets the maximum number of bytes read from the file
+     * Gets the maximum number of bytes read from the file in each fread call
      * @return int
      */
     public function getChunkSize()  {
@@ -37,7 +37,7 @@ class FileResource implements IDownloadableResource {
     }
 
     /**
-     * Sets the maximum number of bytes read from the file
+     * Sets the maximum number of bytes read from the file in each fread call
      * @param int $chunkSize
      */
     public function setChunkSize($chunkSize) {
