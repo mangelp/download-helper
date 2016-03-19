@@ -7,6 +7,8 @@ namespace mangelp\downloadHelper;
  *  + https://github.com/TimOliver/PHP-Framework-Classes/blob/master/download.class.php
  *  + https://github.com/pomle/php-serveFilePartial/blob/master/ServeFilePartial.inc.php
  *  + https://github.com/diversen/http-send-file
+ * HTTP spec reference
+ *  + https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.16
  */
 class DownloadHelper {
     
@@ -14,13 +16,13 @@ class DownloadHelper {
     const DISPOSITION_INLINE = 'inline';
     
     /**
-     * @var IDowloadableResource
+     * @var IDownloadableResource
      */
     private $resource = null;
 
     /**
      * Gets the resource to be downloaded
-     * @return IDowloadableResource
+     * @return IDownloadableResource
      */
     public function getResource()  {
         return $this->resource;
@@ -28,9 +30,9 @@ class DownloadHelper {
 
     /**
      * Sets the resource to be downloaded
-     * @param IDowloadableResource $resource
+     * @param IDownloadableResource $resource
      */
-    public function setResource(IDowloadableResource $resource) {
+    public function setResource(IDownloadableResource $resource) {
         $this->resource = $resource;
     }
     
@@ -107,15 +109,31 @@ class DownloadHelper {
      * @throws \RuntimeException
      */
     public function download() {
+        $this->disableOutputFilters();
+        $this->disableOutputBuffering();
         
-        if (empty($this->resource)) {
-            throw new \RuntimeException('Missing the resource to be downloaded');
+        $ranges = $this->getRanges();
+        
+        if ($ranges !== false && (count($ranges > 1) || count($ranges) == 0)) {
+            $this->outputBadRangeHeader();
+            $this->outputEnd();
         }
         
-        $this->disableOutputBuffering();
-        $this->disableOutputFilters();
         $this->outputHeaders();
-        $this->outputData();
+
+        if ($ranges === false) {
+            $this->outputNonRangeDownloadHeader();
+            $size = $this->resource->getSize();
+            $ranges = [
+                ['start' => 0, 'end' => $size - 1, 'length' => $size]
+            ];
+        }
+        else {
+            // We only support single-range download :'(
+            $this->outputRangeDownloadHeaders($ranges[0]);
+        }
+        
+        $this->outputData($ranges);
         $this->outputEnd();
     }
     
@@ -150,9 +168,13 @@ class DownloadHelper {
         header('Pragma: public');
         header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
         header('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
+        header('Content-Type: ' . $this->resource->getMime());
         
         if ($this->byteRangesEnabled) {
             header('Accept-Ranges: bytes');
+        }
+        else {
+            header('Accept-Ranges: none');
         }
     }
     
@@ -161,12 +183,12 @@ class DownloadHelper {
      * @param int $start
      * @param int $end
      */
-    protected function outputRangeHeaders($start, $end) {
+    protected function outputRangeDownloadHeaders(array $range) {
+        
         header('HTTP/1.1 206 Partial Content');
         header('Accept-Ranges: bytes');
-        header('Content-Range: bytes ' . ($start - $end) . '/' . $this->resource->getSize());
-        $contentLength = $end - $start + 1;
-        header('Content-Length: ' . $contentLength);
+        header('Content-Range: bytes ' . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
+        header('Content-Length: ' . $range['length']);
     }
     
     /**
@@ -177,6 +199,14 @@ class DownloadHelper {
     }
     
     /**
+     * Outputs headers to return the full file
+     */
+    protected function outputNonRangeDownloadHeader() {
+        header('HTTP/1.1 200');
+        header('Content-Length: ' . $this->resource->getSize());
+    }
+    
+    /**
      * Processes the existing HTTP_RANGE server header and returns the ranges as an array where each
      * item has an start and length keys for both the start byte offset and the number of bytes to
      * retrieve from the start offset.
@@ -184,16 +214,19 @@ class DownloadHelper {
      * @return array Ranges array
      */
     protected function getRanges() {
-        if (!$this->byteRangesEnabled || !isset($_SERVER['HTTP_RANGE'])) {
+        if (!$this->byteRangesEnabled || !isset($_SERVER['HTTP_RANGE']) || empty($_SERVER['HTTP_RANGE'])) {
             return false;
         }
         
         $rangeHeaderHelper = new HttpRangeHeaderHelper();
         $ranges = $rangeHeaderHelper->parseRangeHeader();
         
-        if ($ranges === false) {
-            $this->outputBadRangeHeader();
-            $this->outputEnd();
+        if ($ranges !== false) {
+            $rangeHeaderHelper->joinContinuousRanges($ranges);
+        }
+        else {
+            // When there is no valid range disable byte ranges to return the full set of data
+            $this->byteRangesEnabled = false;
         }
         
         return $ranges;
@@ -202,27 +235,17 @@ class DownloadHelper {
     /**
      * Outputs the data
      */
-    protected function outputData() {
-        set_time_limit(0);
+    protected function outputData($ranges) {
         $offset = 0;
-        
-        if ($this->byteRangesEnabled) {
-            $ranges = $this->getRanges();
-        }
-        else {
-            $ranges = [['start' => 0, 'length' => $this->size]];
-        }
-        
-        if (count($ranges) != 1) {
-            $this->outputBadRangeHeader();
-            $this->outputEnd();
-        }
 
         $pos = 0;
         $limit = count($ranges);
         $data = true;
+        $timeLimit = ini_get('max_execution_time');
         
         while($data !== false && $pos < $limit) {
+            // Use a short time limit for every read
+            set_time_limit(60);
             $data = $this->resource->readBytes($ranges[$pos]['start'], $ranges[$pos]['length']);
             
             if ($data !== false) {
@@ -237,6 +260,8 @@ class DownloadHelper {
             
             ++$pos;
         }
+        
+        set_time_limit($timeLimit);
     }
     
     /**

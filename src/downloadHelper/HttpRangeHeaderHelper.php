@@ -42,7 +42,7 @@ class HttpRangeHeaderHelper {
                 return false;
             }
         
-            $ranges[]= ['start' => $rangeParts[0], 'length' => $rangeParts[1] - $rangeParts[0] + 1];
+            $ranges[]= ['start' => $rangeParts[0], 'end' => $rangeParts[1], 'length' => $rangeParts[1] - $rangeParts[0] + 1];
         }
         
         usort($ranges, function($a, $b){
@@ -50,5 +50,21 @@ class HttpRangeHeaderHelper {
         });
         
         return $ranges;
+    }
+    
+    public function joinContinuousRanges(array &$ranges) {
+        foreach($ranges as $pos => $range) {
+            if ($pos == 0) {
+                continue;
+            }
+            
+            $prev = $ranges[$pos-1];
+            
+            if ($prev['end'] == $range['start'] - 1) {
+                $ranges[$pos-1]['end'] = $range['end'];
+                $ranges[$pos-1]['length'] += $range['length'];
+                unset($ranges[$pos]);
+            }
+        }
     }
 }
