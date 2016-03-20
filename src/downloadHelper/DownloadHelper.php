@@ -1,4 +1,11 @@
 <?php
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ * (c) 2009-2015 Miguel Angel Perez <mangelp[ATT]gmail[DOTT]com>
+ */
+
 namespace mangelp\downloadHelper;
 
 /**
@@ -99,24 +106,40 @@ class DownloadHelper {
         $this->byteRangesEnabled = (bool)$byteRangesEnabled;
     }
     
-    public function __construct() {
+    /**
+     * @var IOutputHelper
+     */
+    private $output = null;
+
+    /**
+     * Gets
+     * @return IOutputHelper
+     */
+    public function getOutput()  {
+        return $this->output;
+    }
+    
+    public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
+        $this->ouput = $output;
+        
+        if ($resource !== null) {
+            $this->setResource($resource);
+        }
     }
     
     /**
-     * Performs the generation of an HTTP response that returns a given resource to the client that
-     * should handle it and either download or open it.
+     * Writes the download to the given IOutputHelper implementation along with all the needed
+     * HTTP headers.
      *
      * @throws \RuntimeException
      */
     public function download() {
-        $this->disableOutputFilters();
-        $this->disableOutputBuffering();
         
         $ranges = $this->getRanges();
         
         if ($ranges !== false && (count($ranges > 1) || count($ranges) == 0)) {
-            $this->outputBadRangeHeader();
-            $this->outputEnd();
+            $this->outputBadRangeHeader($output);
+            $this->die($output);
         }
         
         $this->outputHeaders();
@@ -128,53 +151,37 @@ class DownloadHelper {
                 ['start' => 0, 'end' => $size - 1, 'length' => $size]
             ];
         }
-        else {
-            // We only support single-range download :'(
+        else if (count($ranges) == 1) {
             $this->outputRangeDownloadHeaders($ranges[0]);
         }
-        
-        $this->outputData($ranges);
-        $this->outputEnd();
-    }
-    
-    /**
-     * Disables all output buffers
-     *
-     * @throws \RuntimeException If headers have been already sent
-     */
-    protected function disableOutputBuffering() {
-        if (headers_sent()) {
-            throw new \RuntimeException('Headers already sent, cannot start a download.');
+        else if (count($ranges) > 1) {
+            // multipart download is not supported
+            $this->outputError('Not supported');
+            $this->die();
         }
         
-        $result = true;
-        
-        // Loop to disable all output buffers
-        do {
-            $result = ob_end_clean();
-        } while($result);
-    }
-    
-    protected function disableOutputFilters() {
-        
+        $this->sendData($ranges);
+        $this->die();
     }
     
     /**
      * Outputs a first set of headers needed for the download.
      * The method DownloadHelper::outputRangeHeaders() must be also called to output download
      * specific headers if the client specified a range request.
+     *
+     * @param IOutputHelper $output
      */
     protected function outputHeaders() {
-        header('Pragma: public');
-        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-        header('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
-        header('Content-Type: ' . $this->resource->getMime());
+        $this->output->addHeader('Pragma: public');
+        $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        $this->output->addHeader('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
+        $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
         
         if ($this->byteRangesEnabled) {
-            header('Accept-Ranges: bytes');
+            $this->output->addHeader('Accept-Ranges: bytes');
         }
         else {
-            header('Accept-Ranges: none');
+            $this->output->addHeader('Accept-Ranges: none');
         }
     }
     
@@ -183,27 +190,27 @@ class DownloadHelper {
      * @param int $start
      * @param int $end
      */
-    protected function outputRangeDownloadHeaders(array $range) {
+    protected function outputRangeDownloadHeaders(array $range, IOutputHelper $output) {
         
-        header('HTTP/1.1 206 Partial Content');
-        header('Accept-Ranges: bytes');
-        header('Content-Range: bytes ' . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
-        header('Content-Length: ' . $range['length']);
+        $this->output->addHeader('HTTP/1.1 206 Partial Content');
+        $this->output->addHeader('Accept-Ranges: bytes');
+        $this->output->addHeader('Content-Range: bytes ' . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
+        $this->output->addHeader('Content-Length: ' . $range['length']);
     }
     
     /**
      * Outputs the bad range header
      */
-    protected function outputBadRangeHeader() {
-        header('HTTP/1.1 416 Requested Range Not Satisfiable');
+    protected function outputBadRangeHeader(IOutputHelper $output) {
+        $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
     }
     
     /**
      * Outputs headers to return the full file
      */
-    protected function outputNonRangeDownloadHeader() {
-        header('HTTP/1.1 200');
-        header('Content-Length: ' . $this->resource->getSize());
+    protected function outputNonRangeDownloadHeader(IOutputHelper $output) {
+        $this->output->addHeader('HTTP/1.1 200');
+        $this->output->addHeader('Content-Length: ' . $this->resource->getSize());
     }
     
     /**
@@ -224,10 +231,6 @@ class DownloadHelper {
         if ($ranges !== false) {
             $rangeHeaderHelper->joinContinuousRanges($ranges);
         }
-        else {
-            // When there is no valid range disable byte ranges to return the full set of data
-            $this->byteRangesEnabled = false;
-        }
         
         return $ranges;
     }
@@ -235,7 +238,7 @@ class DownloadHelper {
     /**
      * Outputs the data
      */
-    protected function outputData($ranges) {
+    protected function sendData(array $ranges, IOutputHelper $output) {
         $offset = 0;
 
         $pos = 0;
@@ -249,10 +252,7 @@ class DownloadHelper {
             $data = $this->resource->readBytes($ranges[$pos]['start'], $ranges[$pos]['length']);
             
             if ($data !== false) {
-                print($data);
-                unset($data);
-                ob_flush();
-                flush();
+                $this->output->write($data);
             }
             else {
                 break;
@@ -267,9 +267,14 @@ class DownloadHelper {
     /**
      * Flushes all buffers and ends the script.
      */
-    protected function outputEnd() {
-        ob_flush();
-        flush();
+    protected function end() {
+        $this->output->flush();
+        die();
+    }
+    
+    protected function outputError($error) {
+        $this->output->addHeader('HTTP/1.1 500 ' . $error);
+        $this->output->flush();
         die();
     }
 }

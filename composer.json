@@ -1,0 +1,18 @@
+{
+    "name": "mangelp/download-helper",
+    "description": "PSR-4 HTTP download helper with support for Range headers",
+    "type": "aeifjaoefjiaoefj",
+    "require": {
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^5.2"
+    },
+    "license": "MPL 2.0",
+    "authors": [
+        {
+            "name": "mangelp",
+            "email": "mangelp@gmail.com"
+        }
+    ],
+    "minimum-stability": "dev"
+}

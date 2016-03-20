@@ -1,4 +1,11 @@
 <?php
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/.
+ * (c) 2009-2015 Miguel Angel Perez <mangelp[ATT]gmail[DOTT]com>
+ */
+
 namespace mangelp\downloadHelper;
 
 /**
@@ -10,7 +17,7 @@ class HttpRangeHeaderHelper {
      * @param string $rangeHeader
      * @return boolean|array
      */
-    public function parseRangeHeader($rangeHeader = null) {
+    public function parseRangeHeader($rangeHeader = null, $defaultStart = 0, $defaultEnd = null) {
         
         if ($rangeHeader === null && isset($_SERVER['HTTP_RANGE'])) {
             $rangeHeader = $_SERVER['HTTP_RANGE'];
@@ -29,11 +36,10 @@ class HttpRangeHeaderHelper {
             }
         
             if ($part[0] == '-') {
-                $part = "0$part";
+                $part = "$defaultStart$part";
             }
-        
-            if ($part[strlen($part) - 1] == '-') {
-                $part .= "" . $this->size - 1;
+            else if (substr($part, -1) == '-') {
+                $part .= $defaultEnd;
             }
         
             $rangeParts = explode('-', $part);
@@ -41,30 +47,37 @@ class HttpRangeHeaderHelper {
             if (count($rangeParts) != 2) {
                 return false;
             }
+            
+            $start = (int)$rangeParts[0];
+            $end = (int)$rangeParts[1];
+            $length = $end - $start + 1;
+            
+            if ($length < 1) {
+                return false;
+            }
         
-            $ranges[]= ['start' => $rangeParts[0], 'end' => $rangeParts[1], 'length' => $rangeParts[1] - $rangeParts[0] + 1];
+            $ranges[]= ['start' => (int)$rangeParts[0], 'end' => $end, 'length' => $length];
         }
-        
-        usort($ranges, function($a, $b){
-            return ($a['start'] - $b['start']) % 2;
-        });
         
         return $ranges;
     }
     
-    public function joinContinuousRanges(array &$ranges) {
-        foreach($ranges as $pos => $range) {
-            if ($pos == 0) {
-                continue;
+    public function joinContinuousRanges(array $ranges) {
+        $length = count($ranges);
+        $i = 1;
+
+        while($i < $length) {
+            if ($ranges[$i-1]['end'] == ($ranges[$i]['start'] - 1)) {
+                $ranges[$i-1]['end'] = $ranges[$i]['end'];
+                $ranges[$i-1]['length'] += $ranges[$i]['length'];
+                array_splice($ranges, $i, 1);
+                --$length;
             }
-            
-            $prev = $ranges[$pos-1];
-            
-            if ($prev['end'] == $range['start'] - 1) {
-                $ranges[$pos-1]['end'] = $range['end'];
-                $ranges[$pos-1]['length'] += $range['length'];
-                unset($ranges[$pos]);
+            else {
+                ++$i;
             }
         }
+        
+        return array_values($ranges);
     }
 }

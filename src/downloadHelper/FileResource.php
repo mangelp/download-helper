@@ -1,6 +1,9 @@
 <?php
 namespace mangelp\downloadHelper;
 
+/**
+ * File reader for use with the download helper.
+ */
 class FileResource implements IDownloadableResource {
     
     /**
@@ -14,6 +17,27 @@ class FileResource implements IDownloadableResource {
      */
     public function getFileName()  {
         return $this->filePath;
+    }
+    
+    /**
+     * @var string
+     */
+    private $mime = null;
+
+    /**
+     * Gets the mime type
+     * @return string
+     */
+    public function getMime()  {
+        return $this->mime;
+    }
+
+    /**
+     * Sets the mime type
+     * @param string $mime
+     */
+    public function setMime($mime) {
+        $this->mime = $mime;
     }
     
     private $fd = null;
@@ -53,7 +77,7 @@ class FileResource implements IDownloadableResource {
      * @throws \RuntimeException If the file size cannot be read and so the file does not exists
      * or is not accesible.
      */
-    public function __construct($filePath) {
+    public function __construct($filePath, $mime = null) {
         
         $size = filesize($filePath);
         
@@ -63,6 +87,15 @@ class FileResource implements IDownloadableResource {
         
         $this->size = $size;
         $this->filePath = $filePath;
+        
+        if (empty($mime)) {
+            $finfod = finfo_open(FILEINFO_MIME_TYPE);
+            $mime = finfo_file($finfod, $this->filePath);
+        }
+        
+        if (!empty($mime)) {
+            $this->setMime($mime);
+        }
     }
     
     /**
