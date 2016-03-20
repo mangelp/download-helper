@@ -74,5 +74,9 @@ class FileResourceTest extends \PHPUnit_Framework_TestCase {
         } while($data);
         
         self::assertEquals(["one\nt", "wo\nth", "ree\nf", "our"], $datas);
+        
+        $actual = implode($datas);
+        $expected = file_get_contents(__DIR__ . '/foo.txt');
+        self::assertEquals($actual, $expected);
     }
 }

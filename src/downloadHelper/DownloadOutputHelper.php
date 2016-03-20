@@ -15,14 +15,16 @@ namespace mangelp\downloadHelper;
  */
 class DownloadOutputHelper implements IOutputHelper {
 
-    public function __construct() {
-        
+    public function __construct($clearOutputBuffers = true) {
+        if ($clearOutputBuffers) {
+            $this->clearOutputBuffers();
+        }
     }
     
-    private $initDone = false;
+    private $outputBuffersCleared = false;
     
-    protected function initForDownload() {
-        if ($this->initDone) {
+    protected function clearOutputBuffers() {
+        if ($this->outputBuffersCleared) {
             return;
         }
         
@@ -33,7 +35,7 @@ class DownloadOutputHelper implements IOutputHelper {
             $result = ob_end_clean();
         } while($result);
         
-        $this->initDone = true;
+        $this->outputBuffersCleared = true;
     }
     
     private $headersSent = false;
@@ -72,17 +74,13 @@ class DownloadOutputHelper implements IOutputHelper {
     }
     
     public function write($data) {
-        if (!$this->initDone) {
-            $this->initForDownload();
-        }
-        
         if (!$this->headersSent) {
             $this->sendHeaders();
         }
         
         echo $data;
         
-        $this->flush;
+        $this->flush();
     }
     
     public function flush() {
