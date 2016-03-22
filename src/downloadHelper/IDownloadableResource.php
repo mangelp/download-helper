@@ -29,10 +29,13 @@ interface IDownloadableResource {
      *
      * @param int $startOffset File offset. Defaults to 0.
      * @param int $length Number of bytes to read. If set to null then the file will be read to
-     * the end in chunks of 1024 bytes. Defaults to null.
+     * the end in chunks of a default size specified by the concreate IDownloadableResource
+     * implementation. Defaults to null.
+     * @param int $maxChunkSize Maximum size of data reads. If set to a negative, zero or null value
+     * it will use the default specified by the underliying IDownloadableResource implementation.
      * @return the read bytes as an string or false if it could not read any
      * @throws \InvalidArgumentException If the offset is negative or greater than the file size or
      * if the length is negative or zero.
      */
-    public function readBytes($startOffset = 0, $length = null);
+    public function readBytes($startOffset = 0, $length = null, $maxChunkSize = null);
 }

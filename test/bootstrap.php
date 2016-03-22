@@ -7,6 +7,9 @@
  */
 
 $path = dirname(__DIR__) . '/src/downloadHelper';
+$composerAutoloadPath = dirname(__DIR__) . '/vendor/autoload.php';
+
+include $composerAutoloadPath;
 
 include "$path/IOutputHelper.php";
 include "$path/IDownloadableResource.php";

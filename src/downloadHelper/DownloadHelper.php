@@ -119,8 +119,52 @@ class DownloadHelper {
         return $this->output;
     }
     
+    /**
+     * @var int
+     */
+    private $readTimeLimit = 30;
+
+    /**
+     * Gets a number of seconds for the read operation to end.
+     * If is set to zero or a negative value then the time limit will not be set before reads.
+     * @return int
+     */
+    public function getReadTimeLimit()  {
+        return $this->readTimeLimit;
+    }
+
+    /**
+     * Sets a number of seconds for the read operation to end.
+     * If is set to zero or a negative value then the time limit will not be set before reads.
+     * @param int $readTimeLimit
+     */
+    public function setReadTimeLimit($readTimeLimit) {
+        $this->readTimeLimit = (int)$readTimeLimit;
+    }
+    
+    /**
+     * @var bool
+     */
+    private $restorePreviousTimeLimit = false;
+
+    /**
+     * Gets if the time limit before downloading is reset after the download data ouput have finished
+     * @return bool
+     */
+    public function isRestorePreviousTimeLimit()  {
+        return $this->restorePreviousTimeLimit;
+    }
+
+    /**
+     * Sets if the time limit before downloading is reset after the download data ouput have finished
+     * @param bool $restorePreviousTimeLimit
+     */
+    public function setrestorePreviousTimeLimit($restorePreviousTimeLimit) {
+        $this->restorePreviousTimeLimit = (bool)$restorePreviousTimeLimit;
+    }
+    
     public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
-        $this->ouput = $output;
+        $this->output = $output;
         
         if ($resource !== null) {
             $this->setResource($resource);
@@ -201,14 +245,14 @@ class DownloadHelper {
     /**
      * Outputs the bad range header
      */
-    protected function outputBadRangeHeader(IOutputHelper $output) {
+    protected function outputBadRangeHeader() {
         $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
     }
     
     /**
      * Outputs headers to return the full file
      */
-    protected function outputNonRangeDownloadHeader(IOutputHelper $output) {
+    protected function outputNonRangeDownloadHeader() {
         $this->output->addHeader('HTTP/1.1 200');
         $this->output->addHeader('Content-Length: ' . $this->resource->getSize());
     }
@@ -238,17 +282,20 @@ class DownloadHelper {
     /**
      * Outputs the data
      */
-    protected function sendData(array $ranges, IOutputHelper $output) {
+    protected function sendData(array $ranges) {
         $offset = 0;
 
         $pos = 0;
         $limit = count($ranges);
         $data = true;
-        $timeLimit = ini_get('max_execution_time');
+        $previousTimeLimit = ini_get('max_execution_time');
         
         while($data !== false && $pos < $limit) {
-            // Use a short time limit for every read
-            set_time_limit(60);
+            if ($this->readTimeLimit > 0) {
+                // Set the time limit for every read
+                set_time_limit($this->readTimeLimit);
+            }
+            
             $data = $this->resource->readBytes($ranges[$pos]['start'], $ranges[$pos]['length']);
             
             if ($data !== false) {
@@ -261,7 +308,9 @@ class DownloadHelper {
             ++$pos;
         }
         
-        set_time_limit($timeLimit);
+        if ($this->restorePreviousTimeLimit) {
+            set_time_limit($previousTimeLimit);
+        }
     }
     
     /**

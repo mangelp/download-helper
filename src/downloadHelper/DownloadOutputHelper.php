@@ -32,7 +32,7 @@ class DownloadOutputHelper implements IOutputHelper {
         
         // Loop to disable all output buffers
         do {
-            $result = ob_end_clean();
+            $result = @ob_end_clean();
         } while($result);
         
         $this->outputBuffersCleared = true;
@@ -73,6 +73,11 @@ class DownloadOutputHelper implements IOutputHelper {
         $this->headersSent = true;
     }
     
+    /**
+     *
+     * {@inheritDoc}
+     * @see \mangelp\downloadHelper\IOutputHelper::write()
+     */
     public function write($data) {
         if (!$this->headersSent) {
             $this->sendHeaders();
@@ -80,7 +85,7 @@ class DownloadOutputHelper implements IOutputHelper {
         
         echo $data;
         
-        $this->flush();
+        return strlen($data);
     }
     
     public function flush() {

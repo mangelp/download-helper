@@ -129,7 +129,7 @@ class FileResource implements IDownloadableResource {
      * {@inheritDoc}
      * @see \mangelp\downloadHelper\IDownloadableResource::readBytes()
      */
-    public function readBytes($startOffset = 0, $length = null) {
+    public function readBytes($startOffset = 0, $length = null, $maxChunkSize = null) {
         $this->ensureOpen();
         
         $startOffset = (int)$startOffset;
@@ -149,13 +149,19 @@ class FileResource implements IDownloadableResource {
         
         $data = false;
         
-        if ($this->chunkSize === null || $this->chunkSize >= $length) {
+        if ($maxChunkSize === null || $maxChunkSize <= 0) {
+            $maxChunkSize = $this->chunkSize;
+        }
+        
+        if ($maxChunkSize === null || $maxChunkSize <= 0 || $maxChunkSize >= $length) {
             $data = fread($this->fd, $length);
         }
         else {
             $readSize = 0;
             $readData = true;
             
+            // Read chunks of the file until the desired data length is reached.
+            // Those chunks are appended to an string as they are also read as strings of bytes
             while($readSize < $length && $readData !== false) {
                 $readData = fread($this->fd, $this->chunkSize);
                 
@@ -163,7 +169,7 @@ class FileResource implements IDownloadableResource {
                     break;
                 }
                 
-                if ($data) {
+                if ($data !== false) {
                     $data .= $readData;
                 }
                 else {

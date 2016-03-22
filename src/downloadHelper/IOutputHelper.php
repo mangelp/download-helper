@@ -30,6 +30,7 @@ interface IOutputHelper {
     /**
      * Writes to the output stream
      * @param string $data
+     * @return int number of bytes written
      */
     public function write($data);
     

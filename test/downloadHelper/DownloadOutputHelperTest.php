@@ -41,11 +41,18 @@ class DownloadOutputHelperTest extends \PHPUnit_Framework_TestCase {
     }
     
     public function testWriteFileToOutput() {
-        ob_start();
-        $fileResource = new FileResource(__DIR__ . '/foo.txt');
-        $this->downloadOutputHelper->write($fileResource->readBytes(0, 8192));
-        $contents = ob_get_clean();
         $expected = file_get_contents(__DIR__ . '/foo.txt');
+        $fileResource = new FileResource(__DIR__ . '/foo.txt');
+        $fileResourceBytes = $fileResource->readBytes(0, 8192);
+        
+        self::assertEquals($expected, $fileResourceBytes);
+        
+        self::assertTrue(ob_start());
+        $writeCount = $this->downloadOutputHelper->write($fileResourceBytes);
+        $contents = ob_get_contents();
+        ob_end_clean();
+        self::assertEquals(strlen($expected), $writeCount);
+        self::assertNotFalse($contents);
         
         self::assertEquals($expected, $contents);
     }
