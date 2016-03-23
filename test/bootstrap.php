@@ -14,6 +14,7 @@ include $composerAutoloadPath;
 include "$path/IOutputHelper.php";
 include "$path/IDownloadableResource.php";
 include "$path/FileResource.php";
+include "$path/StringResource.php";
 include "$path/DownloadOutputHelper.php";
 include "$path/HttpRangeHeaderHelper.php";
 include "$path/DownloadHelper.php";
