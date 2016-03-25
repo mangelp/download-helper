@@ -60,4 +60,29 @@ class StringResourceTest extends \PHPUnit_Framework_TestCase {
         $actual = implode($datas);
         self::assertEquals($this->testString, $actual);
     }
+    
+    public function testReadStringChunks() {
+        $chunks = [
+            [0, 4],
+            [6,10],
+            [12,16],
+            [18,20],
+            [22,25],
+        ];
+    
+        $expected = [
+            'Lorem',
+            'ipsum',
+            'dolor',
+            'sit',
+            'amet',
+        ];
+    
+        foreach($chunks as $pos => $chunk) {
+            $startByte = $chunk[0];
+            $length = $chunk[1] - $chunk[0] + 1;
+            $bytes = $this->stringResource->readBytes($startByte, $length);
+            self::assertEquals($expected[$pos], $bytes, "Failed to properly read bytes(${chunk[0]},${chunk[1]})");
+        }
+    }
 }

@@ -75,8 +75,29 @@ class FileResourceTest extends \PHPUnit_Framework_TestCase {
         
         self::assertEquals(["one\nt", "wo\nth", "ree\nf", "our"], $datas);
         
-        $actual = implode($datas);
+        $actual = implode("", $datas);
         $expected = file_get_contents(__DIR__ . '/foo.txt');
         self::assertEquals($actual, $expected);
+    }
+    
+    public function testReadFileChunks() {
+        $chunks = [
+            [0, 2],
+            [4,6],
+            [8,12],
+            [14,17],
+        ];
+        
+        $expected = [
+            'one',
+            'two',
+            'three',
+            'four',
+        ];
+        
+        foreach($chunks as $pos => $chunk) {
+            $bytes = $this->fileResource->readBytes($chunk[0], $chunk[1] - $chunk[0] + 1);
+            self::assertEquals($expected[$pos], $bytes);
+        }
     }
 }

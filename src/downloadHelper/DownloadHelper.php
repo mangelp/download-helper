@@ -181,13 +181,12 @@ class DownloadHelper {
         
         $ranges = $this->getRanges();
         
-        if ($ranges !== false && (count($ranges > 1) || count($ranges) == 0)) {
-            $this->outputBadRangeHeader($output);
-            $this->die($output);
+        if ($ranges !== false && (count($ranges) > 1 || count($ranges) == 0)) {
+            $this->outputBadRangeHeader();
         }
         
         $this->outputHeaders();
-
+        
         if ($ranges === false) {
             $this->outputNonRangeDownloadHeader();
             $size = $this->resource->getSize();
@@ -201,11 +200,10 @@ class DownloadHelper {
         else if (count($ranges) > 1) {
             // multipart download is not supported
             $this->outputError('Not supported');
-            $this->die();
         }
         
         $this->sendData($ranges);
-        $this->die();
+        die();
     }
     
     /**
@@ -234,7 +232,7 @@ class DownloadHelper {
      * @param int $start
      * @param int $end
      */
-    protected function outputRangeDownloadHeaders(array $range, IOutputHelper $output) {
+    protected function outputRangeDownloadHeaders(array $range) {
         
         $this->output->addHeader('HTTP/1.1 206 Partial Content');
         $this->output->addHeader('Accept-Ranges: bytes');
@@ -247,6 +245,7 @@ class DownloadHelper {
      */
     protected function outputBadRangeHeader() {
         $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
+        die();
     }
     
     /**
@@ -264,13 +263,17 @@ class DownloadHelper {
      *
      * @return array Ranges array
      */
-    protected function getRanges() {
-        if (!$this->byteRangesEnabled || !isset($_SERVER['HTTP_RANGE']) || empty($_SERVER['HTTP_RANGE'])) {
+    public function getRanges($rangeHeaderContent = null) {
+        if ($rangeHeaderContent === null && isset($_SERVER) && isset($_SERVER['HTTP_RANGE'])) {
+            $rangeHeaderContent = $_SERVER['HTTP_RANGE'];
+        }
+        
+        if (!$this->byteRangesEnabled || empty($rangeHeaderContent)) {
             return false;
         }
         
         $rangeHeaderHelper = new HttpRangeHeaderHelper();
-        $ranges = $rangeHeaderHelper->parseRangeHeader();
+        $ranges = $rangeHeaderHelper->parseRangeHeader($rangeHeaderContent);
         
         if ($ranges !== false) {
             $rangeHeaderHelper->joinContinuousRanges($ranges);

@@ -19,7 +19,7 @@ class HttpRangeHeaderHelper {
      */
     public function parseRangeHeader($rangeHeader = null, $defaultStart = 0, $defaultEnd = null) {
         
-        if ($rangeHeader === null && isset($_SERVER['HTTP_RANGE'])) {
+        if ($rangeHeader === null && isset($_SERVER) && isset($_SERVER['HTTP_RANGE'])) {
             $rangeHeader = $_SERVER['HTTP_RANGE'];
         }
         
@@ -27,7 +27,15 @@ class HttpRangeHeaderHelper {
             return false;
         }
         
-        $parts = explode(',', $rangeHeader);
+        $rangeHeaderParts = explode('=', trim($rangeHeader));
+        
+        if (count($rangeHeaderParts) != 2 || strtolower(trim($rangeHeaderParts[0])) != 'bytes'
+                || empty($rangeHeaderParts[1])) {
+                    
+            return false;
+        }
+        
+        $parts = explode(',', $rangeHeaderParts[1]);
         $ranges = [];
         
         foreach($parts as $part) {
