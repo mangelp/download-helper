@@ -113,10 +113,29 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         }
     }
     
+    private function existsCommand($cmdName) {
+        $output = null;
+        $return = null;
+        
+        exec('which ' . $cmdName . ' > /dev/null', $output, $return);
+        
+        if ($return == 0) {
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    
     public function testDownloadByHttpClientTool() {
         
         if (!$this->phpServerPid || !$this->phpServerPort) {
-            self::fail('Cannot execute test if the php server was not started');
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
+            return;
+        }
+        
+        if (!$this->existsCommand('curl')) {
+            self::markTestSkipped('Curl is required to test HTTP client download with range headers');
             return;
         }
 
