@@ -50,7 +50,7 @@ class FileResource implements IDownloadableResource {
     /**
      * @var int
      */
-    private $chunkSize = 1024*8;
+    private $chunkSize = 8092;
 
     /**
      * Gets the maximum number of bytes read from the file in each fread call
@@ -130,14 +130,24 @@ class FileResource implements IDownloadableResource {
      * @see \mangelp\downloadHelper\IDownloadableResource::readBytes()
      */
     public function readBytes($startOffset = 0, $length = null, $maxChunkSize = null) {
-        $this->ensureOpen();
         
         $startOffset = (int)$startOffset;
         $length = (int)$length;
+        $maxChunkSize = (int)$maxChunkSize;
         
         if ($startOffset < 0 || $startOffset > $this->size - 1) {
             return false;
         }
+        
+        if ($maxChunkSize < 1) {
+            $maxChunkSize = $this->chunkSize;
+        }
+        
+        if ($length < 1) {
+            $length = $this->size;
+        }
+        
+        $this->ensureOpen();
         
         if (fseek($this->fd, $startOffset, SEEK_SET) == -1) {
             throw new \RuntimeException("Cannot seek into file descriptor");
@@ -149,34 +159,31 @@ class FileResource implements IDownloadableResource {
         
         $data = false;
         
-        if ($maxChunkSize === null || $maxChunkSize <= 0) {
-            $maxChunkSize = $this->chunkSize;
-        }
-        
-        if ($maxChunkSize === null || $maxChunkSize <= 0 || $maxChunkSize >= $length) {
+        if ($length <= $maxChunkSize) {
             $data = fread($this->fd, $length);
         }
         else {
-            $readSize = 0;
-            $readData = true;
+            $sizeRead = 0;
+            $dataRead = '';
             
             // Read chunks of the file until the desired data length is reached.
             // Those chunks are appended to an string as they are also read as strings of bytes
-            while($readSize < $length && $readData !== false) {
-                $readData = fread($this->fd, $this->chunkSize);
+            while($sizeRead < $length && !feof($this->fd)) {
+                $nextChunkSize = $length - $sizeRead;
                 
-                if ($readData === false) {
+                if ($nextChunkSize > $maxChunkSize) {
+                    $nextChunkSize = $maxChunkSize;
+                }
+                
+                $dataRead = fread($this->fd, $nextChunkSize);
+                
+                if ($dataRead === false) {
+                    // No more data to read
                     break;
                 }
                 
-                if ($data !== false) {
-                    $data .= $readData;
-                }
-                else {
-                    $data = $readData;
-                }
-                
-                $readSize += strlen($readData);
+                $sizeRead += strlen($dataRead);
+                $data .= $dataRead;
             }
         }
         
