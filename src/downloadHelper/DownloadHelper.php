@@ -179,13 +179,14 @@ class DownloadHelper {
      */
     public function download() {
         
-        $ranges = $this->getRanges();
+        $ranges = false;
         
-        if ($ranges !== false && (count($ranges) > 1 || count($ranges) == 0)) {
+        try {
+            $ranges = $this->getRanges();
+        }
+        catch(\InvalidArgumentException $iaex) {
             $this->outputBadRangeHeader();
         }
-        
-        $this->outputHeaders();
         
         if ($ranges === false) {
             $this->outputNonRangeDownloadHeader();
@@ -213,7 +214,7 @@ class DownloadHelper {
      *
      * @param IOutputHelper $output
      */
-    protected function outputHeaders() {
+    protected function outputCommonHeaders() {
         $this->output->addHeader('Pragma: public');
         $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
         $this->output->addHeader('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
@@ -235,6 +236,9 @@ class DownloadHelper {
     protected function outputRangeDownloadHeaders(array $range) {
         
         $this->output->addHeader('HTTP/1.1 206 Partial Content');
+        
+        $this->outputCommonHeaders();
+        
         $this->output->addHeader('Accept-Ranges: bytes');
         $this->output->addHeader('Content-Range: bytes ' . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
         $this->output->addHeader('Content-Length: ' . $range['length']);
@@ -245,7 +249,7 @@ class DownloadHelper {
      */
     protected function outputBadRangeHeader() {
         $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
-        die();
+        $this->end();
     }
     
     /**
@@ -253,6 +257,9 @@ class DownloadHelper {
      */
     protected function outputNonRangeDownloadHeader() {
         $this->output->addHeader('HTTP/1.1 200');
+        
+        $this->outputCommonHeaders();
+        
         $this->output->addHeader('Content-Length: ' . $this->resource->getSize());
     }
     
@@ -261,6 +268,7 @@ class DownloadHelper {
      * item has an start and length keys for both the start byte offset and the number of bytes to
      * retrieve from the start offset.
      *
+     * @throws \InvalidArgumentException If the range is invalid
      * @return array Ranges array
      */
     public function getRanges($rangeHeaderContent = null) {
@@ -269,6 +277,7 @@ class DownloadHelper {
         }
         
         if (!$this->byteRangesEnabled || empty($rangeHeaderContent)) {
+            // We do not have any range to process
             return false;
         }
         
@@ -276,7 +285,15 @@ class DownloadHelper {
         $ranges = $rangeHeaderHelper->parseRangeHeader($rangeHeaderContent);
         
         if ($ranges !== false) {
-            $rangeHeaderHelper->joinContinuousRanges($ranges);
+            
+            $ranges = $rangeHeaderHelper->joinContinuousRanges($ranges);
+            
+            // Check that the ranges are within file contents
+            foreach($ranges as $range) {
+                if ($range['start'] < 0 || $range['end'] >= $this->resource->getSize()) {
+                    throw new \InvalidArgumentException("Invalid range: [${range['start']},${range['end']}]");
+                }
+            }
         }
         
         return $ranges;
