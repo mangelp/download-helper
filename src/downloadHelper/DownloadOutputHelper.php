@@ -94,7 +94,7 @@ class DownloadOutputHelper implements IOutputHelper {
             $this->sendHeaders();
         }
         
-        ob_flush();
-        flush();
+        @ob_flush();
+        @flush();
     }
 }
