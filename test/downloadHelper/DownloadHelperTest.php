@@ -50,25 +50,35 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         $output = new DownloadOutputHelper(false);
         $resource = new FileResource(__DIR__ . '/foo.txt');
         $this->downloadHelper = new DownloadHelper($output, $resource);
+    }
+    
+    protected function requirePhpWebServer() {
         
-        if ($this->getName() == 'testDownloadByHttpClientTool'
-                && !$this->phpServerPid
-                && $this->setRandomPort()) {
-            
-            $output = null;
-            $serverListenDomain = $this->getPhpServerAddress();
-            $cmd = "php -S $serverListenDomain -t " . __DIR__ . " > /dev/null 2>&1 & \
+        if ($this->phpServerPid || !$this->setRandomPort()) {
+            return false;
+        }
+        
+        $output = null;
+        $this->phpServerPid = false;
+        $serverListenDomain = $this->getPhpServerAddress();
+        
+        if (!$serverListenDomain) {
+            return false;
+        }
+        
+        $cmd = "php -S $serverListenDomain -t " . __DIR__ . " > /dev/null 2>&1 & \
     echo $!";
-            
-            exec($cmd, $output);
-            
-            $this->phpServerPid = false;
-            
-            if (is_array($output) && isset($output[0]) && is_numeric($output[0])) {
-                $this->phpServerPid = (int)$output[0];
-                // Do a small wait to avoid the socket not being ready on time
-                usleep(50000);
-            }
+        
+        exec($cmd, $output);
+        
+        if (is_array($output) && isset($output[0]) && is_numeric($output[0])) {
+            $this->phpServerPid = (int)$output[0];
+            // Do a small wait to avoid the socket not being ready on time
+            usleep(50000);
+            return true;
+        }
+        else {
+            return false;
         }
     }
     
@@ -113,6 +123,18 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         }
     }
     
+    /**
+     * @expectedException \InvalidArgumentException
+     */
+    public function testGetRangesThrowsExForInvalidRange() {
+        $this->setExpectedException('\\InvalidArgumentException');
+        
+        self::assertFalse($this->downloadHelper->getRanges('bytes=35-132'));
+        
+        $this->downloadHelper->setByteRangesEnabled(true);
+        $this->downloadHelper->getRanges('bytes=35-132');
+    }
+    
     private function existsCommand($cmdName) {
         $output = null;
         $return = null;
@@ -127,15 +149,15 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         }
     }
     
-    public function testDownloadByHttpClientTool() {
-        
-        if (!$this->phpServerPid || !$this->phpServerPort) {
-            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
-            return;
-        }
+    public function testDownloadedFileRangeBytesByHttpClientTool() {
         
         if (!$this->existsCommand('curl')) {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+        
+        if (!$this->requirePhpWebServer()) {
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
             return;
         }
 
@@ -186,5 +208,70 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         exec('curl -s --header "Range: bytes=13-13" ' . $testScript, $dataRead_13_13);
         self::assertCount(1, $dataRead_13_13);
         self::assertEmpty($dataRead_13_13[0]);
+        
+        $dataReadFailed = null;
+        
+        exec('curl -s --header "Range: bytes=35-168" ' . $testScript, $dataReadFailed);
+        
+        self::assertTrue(is_array($dataReadFailed));
+        self::assertEmpty($dataReadFailed);
+    }
+    
+    public function testDownloadRangeBytesHeadersByHttpClientTool() {
+        
+        if (!$this->existsCommand('curl')) {
+            self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+    
+        if (!$this->requirePhpWebServer()) {
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
+            return;
+        }
+    
+        $testScript = 'http://' . $this->getPhpServerAddress() . '/fooFileDownload.php';
+        
+        $expectedHeaders = [
+            'HTTP/1.1 200',
+            'Pragma: public',
+            'Cache-Control: must-revalidate, post-check=0, pre-check=0',
+            'Content-Disposition: attachment; filename="foo.txt"',
+            'Content-type: text/plain;charset=UTF-8',
+            'Accept-Ranges: bytes',
+            'Content-Length: 18',
+        ];
+        
+        $headers = [];
+        exec('curl -s -o /dev/null --dump-header - ' . $testScript, $headers);
+
+        self::assertNotEmpty($headers);
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+        
+        $expectedHeaders = [
+            'HTTP/1.1 206 Partial Content',
+            'Pragma: public',
+            'Cache-Control: must-revalidate, post-check=0, pre-check=0',
+            'Content-Disposition: attachment; filename="foo.txt"',
+            'Content-type: text/plain;charset=UTF-8',
+            'Accept-Ranges: bytes',
+            'Content-Range: bytes 0-2/18',
+            'Content-Length: 3',
+        ];
+        
+        $headers = [];
+        exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=0-2" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+        
+        $expectedHeaders = [
+            'HTTP/1.1 416 Requested Range Not Satisfiable',
+        ];
+        
+        $headers = [];
+        exec('curl -s --dump-header - --header "Range: bytes=35-168" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
     }
 }

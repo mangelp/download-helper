@@ -38,6 +38,14 @@ class FileResourceTest extends \PHPUnit_Framework_TestCase {
         self::assertEquals(18, $this->fileResource->getSize());
     }
     
+    public function testReadWholeFooFile() {
+        $expected = file_get_contents(__DIR__ . '/foo.txt');
+        $fileResource = new FileResource(__DIR__ . '/foo.txt');
+        $fileResourceBytes = $fileResource->readBytes(0, 8192);
+        
+        self::assertEquals($expected, $fileResourceBytes);
+    }
+    
     public function testReadFileContentsByteByByte() {
         $this->fileResource->setChunkSize(1);
         self::assertEquals(1, $this->fileResource->getChunkSize());
