@@ -10,6 +10,8 @@ namespace mangelp\downloadHelper;
 
 /**
  * Models the operations required to write the HTTP response back to the client.
+ *
+ * Implementors must not raise any kind of notice but can throw exceptions at will.
  */
 interface IOutputHelper {
     
