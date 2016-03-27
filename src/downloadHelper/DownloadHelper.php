@@ -9,6 +9,8 @@
 namespace mangelp\downloadHelper;
 
 /**
+ * Outputs all the needed headers and data to download a file throught HTTP.
+ *
  * Download helper coded following the next samples and repositories:
  *  + http://www.media-division.com/the-right-way-to-handle-file-downloads-in-php/
  *  + https://github.com/TimOliver/PHP-Framework-Classes/blob/master/download.class.php
@@ -49,7 +51,7 @@ class DownloadHelper {
     private $downloadFileName = null;
 
     /**
-     * Gets
+     * Gets the file name to send to the HTTP client downloading the resource
      * @return string
      */
     public function getDownloadFileName()  {
@@ -57,7 +59,7 @@ class DownloadHelper {
     }
 
     /**
-     * Sets
+     * Sets the file name to send to the HTTP client downloading the resource
      * @param string $downloadFileName
      */
     public function setDownloadFileName($downloadFileName) {
@@ -91,7 +93,7 @@ class DownloadHelper {
     private $byteRangesEnabled = false;
 
     /**
-     * Gets the flag
+     * Gets if the download must support the Range header
      * @return bool
      */
     public function isByteRangesEnabled()  {
@@ -99,7 +101,7 @@ class DownloadHelper {
     }
 
     /**
-     * Sets the flag
+     * Sets if the download must support the Range header
      * @param bool $byteRangesEnabled
      */
     public function setByteRangesEnabled($byteRangesEnabled) {
@@ -112,7 +114,8 @@ class DownloadHelper {
     private $output = null;
 
     /**
-     * Gets
+     * Gets the output helper that writes the headers and data to the output stream in response to
+     * an HTTP request
      * @return IOutputHelper
      */
     public function getOutput()  {
@@ -125,7 +128,7 @@ class DownloadHelper {
     private $readTimeLimit = 30;
 
     /**
-     * Gets a number of seconds for the read operation to end.
+     * Gets the number of seconds for each resource read operation to end.
      * If is set to zero or a negative value then the time limit will not be set before reads.
      * @return int
      */
@@ -134,7 +137,7 @@ class DownloadHelper {
     }
 
     /**
-     * Sets a number of seconds for the read operation to end.
+     * Sets the number of seconds for each resource read operation to end.
      * If is set to zero or a negative value then the time limit will not be set before reads.
      * @param int $readTimeLimit
      */
@@ -179,6 +182,10 @@ class DownloadHelper {
      */
     public function download() {
         
+        if (!$this->resource) {
+            throw new \RuntimeException('The resource to download have not been set');
+        }
+        
         $ranges = false;
         
         try {
@@ -218,6 +225,7 @@ class DownloadHelper {
         $this->output->addHeader('Pragma: public');
         $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
         $this->output->addHeader('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
+        $this->output->addHeader('Content-Transfer-Encoding: binary');
         $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
         
         if ($this->byteRangesEnabled) {

@@ -47,6 +47,10 @@ class DownloadOutputHelperTest extends \PHPUnit_Framework_TestCase {
         
         self::assertEquals($expected, $fileResourceBytes);
         
+        self::assertFalse($this->downloadOutputHelper->isHeadersDisabled());
+        $this->downloadOutputHelper->setHeadersDisabled(true);
+        self::assertTrue($this->downloadOutputHelper->isHeadersDisabled());
+        
         self::assertTrue(ob_start());
         $writeCount = $this->downloadOutputHelper->write($fileResourceBytes);
         $contents = ob_get_contents();

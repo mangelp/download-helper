@@ -9,33 +9,38 @@
 namespace mangelp\downloadHelper;
 
 /**
- * Output helper for downloads that implements IOutputHelper
+ * Output helper for downloads that implements IOutputHelper.
  *
  * All headers are sent at once when the first write call is done.
+ *
+ * This helper can disable output buffering and compressioni when it is initiallized to avoid
+ * problems with the download.
  */
 class DownloadOutputHelper implements IOutputHelper {
 
-    public function __construct($clearOutputBuffers = true) {
+    public function __construct($clearOutputBuffers = true, $disableOutputCompression = true) {
         if ($clearOutputBuffers) {
             $this->clearOutputBuffers();
         }
+        
+        if ($disableOutputCompression) {
+            $this->disableOutputCompression();
+        }
     }
     
-    private $outputBuffersCleared = false;
-    
     protected function clearOutputBuffers() {
-        if ($this->outputBuffersCleared) {
-            return;
-        }
-        
         $result = true;
         
         // Loop to disable all output buffers
         do {
             $result = @ob_end_clean();
         } while($result);
-        
-        $this->outputBuffersCleared = true;
+    }
+    
+    protected function disableOutputCompression() {
+        if((int)ini_get('zlib.output_compression')) {
+            ini_set('zlib.output_compression', 0);
+        }
     }
     
     private $headersSent = false;
@@ -50,6 +55,9 @@ class DownloadOutputHelper implements IOutputHelper {
         if ($this->headersSent) {
             throw new \RuntimeException('Headers have been already sent');
         }
+        else if ($this->headersDisabled) {
+            throw new \RuntimeException('Headers have been disabled');
+        }
         
         $this->headers[]= $string;
     }
@@ -58,13 +66,45 @@ class DownloadOutputHelper implements IOutputHelper {
         return $this->headers;
     }
     
-    /**
-     * Outputs all headers
-     */
-    protected function sendHeaders() {
-        if ($this->headersSent) {
+    public function clearHeaders() {
+        if ($this->headersDisabled) {
             return;
         }
+        
+        if ($this->headersSent) {
+            throw new \RuntimeException('Cannot clear headers, they have been already sent.');
+        }
+        
+        $this->headers = [];
+    }
+    
+    private $headersDisabled = false;
+    
+    public function setHeadersDisabled($headersDisabled) {
+        $this->headersDisabled = (bool)$headersDisabled;
+    }
+    
+    public function isHeadersDisabled() {
+        return $this->headersDisabled;
+    }
+    
+    /**
+     * Outputs all headers and throws the required exception if PHP already sent the headers.
+     *
+     * This method only sends the headers the first time, subsequent calls will do nothing.
+     */
+    protected function sendHeaders() {
+        if ($this->headersDisabled || $this->headersSent) {
+            return;
+        }
+        
+        // If PHP sent the headers already we can not send ours
+        if (headers_sent()) {
+            throw new \RuntimeException('Cannot send headers. Headers have been already sent by PHP');
+        }
+        
+        // Try to remove any previous headers
+        header_remove();
         
         foreach($this->headers as $pos => $header) {
             header($header, true);
@@ -79,9 +119,7 @@ class DownloadOutputHelper implements IOutputHelper {
      * @see \mangelp\downloadHelper\IOutputHelper::write()
      */
     public function write($data) {
-        if (!$this->headersSent) {
-            $this->sendHeaders();
-        }
+        $this->sendHeaders();
         
         echo $data;
         
@@ -89,11 +127,9 @@ class DownloadOutputHelper implements IOutputHelper {
     }
     
     public function flush() {
+        $this->sendHeaders();
         
-        if (!$this->headersSent) {
-            $this->sendHeaders();
-        }
-        
+        // This is supossed to be disabled, ¿or not?
         @ob_flush();
         @flush();
     }
