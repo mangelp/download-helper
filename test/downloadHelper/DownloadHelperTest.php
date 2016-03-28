@@ -194,6 +194,10 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         self::assertCount(1, $dataRead_14_17, "No proper data read: " . print_r($dataRead_14_17, true));
         self::assertEquals('four', $dataRead_14_17[0]);
         
+        exec('curl -s --header "Range: bytes=8-12,13-15,10-17" ' . $testScript, $dataReadA);
+        self::assertCount(2, $dataReadA, "No proper data read: " . print_r($dataReadA, true));
+        self::assertEquals(['three', 'four'], $dataReadA);
+        
         // The next tests should return a line feed, but since we are getting the contents from
         // the command output as an array of lines we get instead an array with one empty
         // element.
