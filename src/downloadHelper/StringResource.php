@@ -37,7 +37,27 @@ class StringResource implements IDownloadableResource {
         $this->mime = $mime;
     }
     
-    public function __construct($string = null, $mime = null) {
+    private $lastModifiedDate = null;
+    
+    public function getLastModifiedDate() {
+        return $this->lastModifiedDate;
+    }
+    
+    public function setLastModified(\DateTime $lastModified) {
+        $this->lastModifiedDate = $lastModified;
+    }
+    
+    private $entityTag = null;
+    
+    public function getEntityTag() {
+        return $this->entityTag;
+    }
+    
+    public function setEntityTag($entityTag) {
+        $this->entityTag = $entityTag;
+    }
+    
+    public function __construct($string = null, $mime = null, \DateTime $lastModifiedDate = null, $entityTag = null) {
         if (!is_string($string) && !method_exists($string, '__toString')) {
             throw new \InvalidArgumentException("Invalid argument type, only strings and classes that implement __toString are allowed");
         }
@@ -55,6 +75,9 @@ class StringResource implements IDownloadableResource {
             $this->mime = finfo_buffer($finfo, $this->string, FILEINFO_MIME_TYPE);
             finfo_close($finfo);
         }
+        
+        $this->lastModifiedDate = $lastModifiedDate;
+        $this->entityTag = $entityTag;
     }
     
     public function readBytes($startOffset = 0, $length = null, $maxChunkSize = null) {

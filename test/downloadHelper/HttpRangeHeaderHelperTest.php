@@ -50,6 +50,24 @@ class HttpRangeHaderHelperTest extends \PHPUnit_Framework_TestCase {
         self::assertEquals($expected, $actual);
     }
     
+    public function testJoinOverlappedRanges() {
+        $ranges = [
+            ['start' => 0, 'end' => 99, 'length' => 100],
+            ['start' => 10, 'end' => 199, 'length' => 190],
+            ['start' => 350, 'end' => 399, 'length' => 50],
+            ['start' => 50, 'end' => 249, 'length' => 200],
+        ];
+        
+        $expected = [
+            ['start' => 0, 'end' => 249, 'length' => 250],
+            ['start' => 350, 'end' => 399, 'length' => 50],
+        ];
+        
+        $actual = $this->httpRangeHeaderHelper->joinContinuousRanges($ranges);
+        
+        self::assertEquals($expected, $actual);
+    }
+    
     public function testParseRanges() {
         $actual = $this->httpRangeHeaderHelper->parseRangeHeader('-');
         self::assertFalse($actual);
@@ -88,6 +106,19 @@ class HttpRangeHaderHelperTest extends \PHPUnit_Framework_TestCase {
             'bytes=7-7' => [['start' => 7, 'end' => 7, 'length' => 1]],
             'bytes=13-13' => [['start' => 13, 'end' => 13, 'length' => 1]],
             'bytes=0-0' => [['start' => 0, 'end' => 0, 'length' => 1]],
+        ];
+        
+        foreach ($rangeValues as $rangeHeader => $expectedRangeValue) {
+            $actual = $this->httpRangeHeaderHelper->parseRangeHeader($rangeHeader);
+            self::assertEquals($expectedRangeValue, $actual);
+        }
+    }
+    
+    public function testParseMultipleRanges() {
+        $rangeValues = [
+            'bytes=0-2,4-6' => [['start' => 0, 'end' => 2, 'length' => 3], ['start' => 4, 'end' => 6, 'length' => 3]],
+            'bytes=8-12,14-17' => [['start' => 8, 'end' => 12, 'length' => 5], ['start' => 14, 'end' => 17, 'length' => 4]],
+            'bytes=3-3,7-7,13-13' => [['start' => 3, 'end' => 3, 'length' => 1], ['start' => 7, 'end' => 7, 'length' => 1], ['start' => 13, 'end' => 13, 'length' => 1]],
         ];
         
         foreach ($rangeValues as $rangeHeader => $expectedRangeValue) {

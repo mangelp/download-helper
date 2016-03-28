@@ -175,7 +175,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         
         self::assertNotEmpty($contents);
         $testFileContents = file_get_contents(__DIR__ . '/foo.txt');
-        self::assertCount(4, $contents);
+        self::assertCount(4, $contents, "Read contents: " . print_r($contents, true));
         self::assertEquals($testFileContents, implode("\n", $contents));
         
         exec('curl -s --header "Range: bytes=0-2" ' . $testScript, $dataRead_0_2);
@@ -233,7 +233,6 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         
         $expectedHeaders = [
             'HTTP/1.1 200',
-            'Pragma: public',
             'Cache-Control: must-revalidate, post-check=0, pre-check=0',
             'Content-Disposition: attachment; filename="foo.txt"',
             'Content-Transfer-Encoding: binary',
@@ -246,12 +245,10 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         exec('curl -s -o /dev/null --dump-header - ' . $testScript, $headers);
 
         self::assertNotEmpty($headers);
-        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers), "Received headers: " . print_r($headers, true));
         
         $expectedHeaders = [
             'HTTP/1.1 206 Partial Content',
-            'Pragma: public',
-            'Cache-Control: must-revalidate, post-check=0, pre-check=0',
             'Content-Disposition: attachment; filename="foo.txt"',
             'Content-Transfer-Encoding: binary',
             'Content-type: text/plain;charset=UTF-8',
@@ -264,7 +261,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=0-2" ' . $testScript, $headers);
         
         self::assertNotEmpty($headers);
-        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers), "Received headers: " . print_r($headers, true));
         
         $expectedHeaders = [
             'HTTP/1.1 416 Requested Range Not Satisfiable',

@@ -14,6 +14,10 @@ namespace mangelp\downloadHelper;
 class HttpRangeHeaderHelper {
     /**
      * Parses the header and return an array of ranges or false if it is not valid
+     *
+     * The returned ranges are sorted first by the start byte ascendent and then when
+     * the first byte is the same they are sorted by the last byte ascendent.
+     *
      * @param string $rangeHeader
      * @return boolean|array
      */
@@ -27,65 +31,132 @@ class HttpRangeHeaderHelper {
             return false;
         }
         
-        $rangeHeaderParts = explode('=', trim($rangeHeader));
+        $parameters = explode(';', trim($rangeHeader));
         
-        if (count($rangeHeaderParts) != 2 || strtolower(trim($rangeHeaderParts[0])) != 'bytes'
-                || empty($rangeHeaderParts[1])) {
-                    
+        if (count($parameters) < 1) {
             return false;
         }
         
-        $parts = explode(',', $rangeHeaderParts[1]);
         $ranges = [];
         
-        foreach($parts as $part) {
-            if ($part == '-') {
-                return false;
-            }
+        foreach($parameters as $parameter) {
+            
+            $rangeHeaderParts = explode('=', trim($parameter));
         
-            if ($part[0] == '-') {
-                $part = "$defaultStart$part";
-            }
-            else if (substr($part, -1) == '-') {
-                $part .= $defaultEnd;
-            }
-        
-            $rangeParts = explode('-', $part);
-        
-            if (count($rangeParts) != 2) {
-                return false;
+            if (count($rangeHeaderParts) != 2
+                    || strtolower(trim($rangeHeaderParts[0])) != 'bytes'
+                    || empty($rangeHeaderParts[1])) {
+                        
+                continue;
             }
             
-            $start = (int)$rangeParts[0];
-            $end = (int)$rangeParts[1];
-            $length = $end - $start + 1;
+            $parts = explode(',', $rangeHeaderParts[1]);
             
-            if ($length < 1) {
-                return false;
+            foreach($parts as $part) {
+                if ($part == '-') {
+                    return false;
+                }
+            
+                if ($part[0] == '-') {
+                    $part = "$defaultStart$part";
+                }
+                else if (substr($part, -1) == '-') {
+                    $part .= $defaultEnd;
+                }
+            
+                $rangeParts = explode('-', $part);
+            
+                if (count($rangeParts) != 2) {
+                    return false;
+                }
+                
+                $start = (int)$rangeParts[0];
+                $end = (int)$rangeParts[1];
+                $length = $end - $start + 1;
+                
+                if ($start > $end) {
+                    return false;
+                }
+            
+                $ranges[]= ['start' => (int)$rangeParts[0], 'end' => $end, 'length' => $length];
             }
+        }
         
-            $ranges[]= ['start' => (int)$rangeParts[0], 'end' => $end, 'length' => $length];
+        if (empty($ranges)) {
+            return false;
+        }
+        else {
+            usort($ranges, function($ra, $rb){
+                $cmp = $ra['start'] - $rb['start'];
+                
+                if ($cmp == 0) {
+                    $cmp = $ra['end'] - $rb['end'];
+                }
+                
+                return $cmp;
+            });
         }
         
         return $ranges;
     }
     
     public function joinContinuousRanges(array $ranges) {
+        
+        // sort ascending first by start byte and then by end byte
+        usort($ranges, function($ra, $rb){
+            $cmp = $ra['start'] - $rb['start'];
+        
+            if ($cmp == 0) {
+                $cmp = $ra['end'] - $rb['end'];
+            }
+        
+            return $cmp;
+        });
+        
         $length = count($ranges);
         $i = 1;
 
         while($i < $length) {
-            if ($ranges[$i-1]['end'] == ($ranges[$i]['start'] - 1)) {
-                $ranges[$i-1]['end'] = $ranges[$i]['end'];
-                $ranges[$i-1]['length'] += $ranges[$i]['length'];
+            if ($this->isContiguous($ranges[$i-1], $ranges[$i])
+                    || $this->isOverlaped($ranges[$i-1], $ranges[$i])) {
+                // Ranges are contiguous or overlap, join them and decrease size
+                $this->joinOverlapped($ranges[$i-1], $ranges[$i]);
                 array_splice($ranges, $i, 1);
                 --$length;
-            }
-            else {
+            } else {
+                // Ranges are not contiguous nor overlap, increase pointer to next element
                 ++$i;
             }
         }
         
         return array_values($ranges);
+    }
+    
+    private function isContiguous($rangeA, $rangeB) {
+        $dif = $rangeB['start'] - $rangeA['end'];
+        
+        return $dif >= 0 && $dif <= 1;
+    }
+    
+    private function isOverlaped($rangeA, $rangeB) {
+        return ($rangeA['start'] >= $rangeB['start'] && $rangeA['start'] <= $rangeB['end'])
+            || ($rangeA['end'] >= $rangeB['start'] && $rangeA['end'] <= $rangeB['end'])
+            || ($rangeB['start'] >= $rangeA['start'] && $rangeB['start'] <= $rangeA['end'])
+            || ($rangeB['end'] >= $rangeA['start'] && $rangeB['end'] <= $rangeA['end']);
+    }
+    
+    /**
+     * Joins two ranges taking as first byte the minimum of the start bytes and as end byte the
+     * maximum of the end bytes.
+     *
+     * The first array is modified to include the second one range.
+     *
+     * @param array $rangeA first array passed by reference.
+     * @param array $rangeB Second array passed by copy.
+     */
+    private function joinOverlapped(array &$rangeA, array $rangeB) {
+        $rangeA['start'] = min([$rangeA['start'], $rangeB['start']]);
+        $rangeA['end'] = max([$rangeA['end'], $rangeB['end']]);
+        $rangeA['length'] = $rangeA['end'] - $rangeA['start'] + 1;
     }
 }

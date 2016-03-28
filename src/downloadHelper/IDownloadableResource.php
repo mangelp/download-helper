@@ -23,6 +23,22 @@ interface IDownloadableResource {
     public function getMime();
     
     /**
+     * Gets a \DateTime instance with the last modified date or null if this is not supported by
+     * the implementation.
+     *
+     * @return \DateTime|null
+     */
+    public function getLastModifiedDate();
+    
+    /**
+     * Gets an string that changes only when the resource has changed or null if this is not
+     * supported by the implementation.
+     *
+     * @return string|null
+     */
+    public function getEntityTag();
+    
+    /**
      * Reads the specified number of bytes from the resource from the given offset.
      *
      * Calling this method without parameters will read the complete resource contents and return it.

@@ -19,4 +19,14 @@ $downloadHelper = new DownloadHelper($output, $resource);
 $downloadHelper->setByteRangesEnabled(true);
 $downloadHelper->setDisposition(DownloadHelper::DISPOSITION_ATTACHMENT);
 $downloadHelper->setDownloadFileName('foo.txt');
-$downloadHelper->download();
+
+$requestMethod = isset($_SERVER) && isset($_SERVER['REQUEST_METHOD']) ?
+    strtolower($_SERVER['REQUEST_METHOD']):
+    'none';
+
+if ($requestMethod == 'get' || $requestMethod == 'post') {
+    $downloadHelper->download();
+}
+else {
+    $downloadHelper->headers();
+}

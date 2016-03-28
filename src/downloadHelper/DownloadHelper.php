@@ -24,6 +24,9 @@ class DownloadHelper {
     const DISPOSITION_ATTACHMENT = 'attachment';
     const DISPOSITION_INLINE = 'inline';
     
+    const CACHE_NEVER = 'never';
+    const CACHE_REVALIDATE = 'revalidate';
+    
     /**
      * @var IDownloadableResource
      */
@@ -162,8 +165,41 @@ class DownloadHelper {
      * Sets if the time limit before downloading is reset after the download data ouput have finished
      * @param bool $restorePreviousTimeLimit
      */
-    public function setrestorePreviousTimeLimit($restorePreviousTimeLimit) {
+    public function setRestorePreviousTimeLimit($restorePreviousTimeLimit) {
         $this->restorePreviousTimeLimit = (bool)$restorePreviousTimeLimit;
+    }
+    
+    private $multipart = false;
+    
+    public function isMultipart() {
+        return $this->multipart;
+    }
+    
+    private $multipartBoundary = null;
+    
+    public function getMultipartBoundary() {
+        return $this->multipartBoundary;
+    }
+    
+    /**
+     * @var string
+     */
+    private $cacheMode = self::CACHE_NEVER;
+
+    /**
+     * Gets the cache mode that controls what cache-control headers are set and how
+     * @return string
+     */
+    public function getCacheMode()  {
+        return $this->cacheMode;
+    }
+
+    /**
+     * Sets the cache mode that controls what cache-control headers are set and how
+     * @param string $cacheMode
+     */
+    public function setCacheMode($cacheMode) {
+        $this->cacheMode = $cacheMode;
     }
     
     public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
@@ -181,37 +217,89 @@ class DownloadHelper {
      * @throws \RuntimeException
      */
     public function download() {
+        $this->processDownload(true, true);
         
+        $this->end();
+    }
+    
+    /**
+     * Only returns all the headers of the response, but without any data.
+     * This method is intended to be of use responding to HEAD requests over the resource. Web
+     * browsers might make those requests to validate the download for caching purposses.
+     *
+     * @throws \RuntimeException
+     */
+    public function headers() {
+        
+        $this->processDownload(true, false);
+        
+        $this->end();
+    }
+    
+    /**
+     * Performs the download and headers output
+     * @param bool $populateHeaders
+     * @param bool $sendData
+     * @throws \RuntimeException
+     */
+    protected function processDownload($populateHeaders, $sendData) {
         if (!$this->resource) {
             throw new \RuntimeException('The resource to download have not been set');
         }
         
         $ranges = false;
+        $rangeError = false;
+        $unsupportedError = false;
         
         try {
             $ranges = $this->getRanges();
         }
         catch(\InvalidArgumentException $iaex) {
-            $this->outputBadRangeHeader();
+            $rangeError = true;
         }
         
+        // Change range type to match
         if ($ranges === false) {
-            $this->outputNonRangeDownloadHeader();
-            $size = $this->resource->getSize();
-            $ranges = [
-                ['start' => 0, 'end' => $size - 1, 'length' => $size]
-            ];
-        }
-        else if (count($ranges) == 1) {
-            $this->outputRangeDownloadHeaders($ranges[0]);
+            $ranges = [];
         }
         else if (count($ranges) > 1) {
-            // multipart download is not supported
-            $this->outputError('Not supported');
+            $this->multipart = true;
+        }
+        else if (count($ranges) == 1
+                && $ranges[0]['length'] == $this->resource->getSize()
+                && $ranges[0]['start'] == 0) {
+            // If ranges are empty then
+            $ranges = [];
         }
         
-        $this->sendData($ranges);
-        die();
+        if ($populateHeaders) {
+            $this->populateHeaders($ranges, $rangeError, $unsupportedError);
+        }
+        
+        if ($sendData) {
+            $this->sendData($ranges);
+        }
+        
+        return $ranges;
+    }
+    
+    protected function populateHeaders($ranges, $rangeError, $unsupportedError) {
+        
+        if ($rangeError) {
+            $this->outputBadRangeHeader();
+        }
+        else if ($unsupportedError) {
+            $this->outputError('Not supported');
+        }
+        else if ($ranges === false || empty($ranges)
+                || (count($ranges) == 1
+                    && $ranges[0]['start'] == 0
+                    && $ranges[0]['length'] == $this->resource->getSize())) {
+            $this->outputNonRangeDownloadHeader();
+        }
+        else {
+            $this->outputRangeDownloadHeaders($ranges);
+        }
     }
     
     /**
@@ -222,17 +310,57 @@ class DownloadHelper {
      * @param IOutputHelper $output
      */
     protected function outputCommonHeaders() {
-        $this->output->addHeader('Pragma: public');
-        $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        
         $this->output->addHeader('Content-Disposition: ' . $this->disposition . '; filename="' . $this->downloadFileName . '"');
         $this->output->addHeader('Content-Transfer-Encoding: binary');
-        $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
         
         if ($this->byteRangesEnabled) {
             $this->output->addHeader('Accept-Ranges: bytes');
         }
         else {
             $this->output->addHeader('Accept-Ranges: none');
+        }
+        
+        $this->output->addHeader('Date: ' . $this->formatHttpHeaderDate(time()));
+        
+        if ($this->cacheMode == self::CACHE_NEVER) {
+            $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        }
+        else if ($this->cacheMode == self::CACHE_REVALIDATE) {
+            $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+            
+            // If neither an etag or last modified dates are provided then the must-revalidate cache
+            // control header will cause the resource to be re-downloaded each time.
+            if ($this->resource->getLastModifiedDate()) {
+                $this->output->addHeader('Last-Modified: ' . $this->formatHttpHeaderDate($this->resource->getLastModifiedDate()));
+            }
+            
+            if ($this->resource->getEntityTag()) {
+                $this->output->addHeader('ETag: ' . $this->resource->getEntityTag());
+            }
+        }
+    }
+    
+    /**
+     * Formats a date for use into a HTTP header
+     * @param \DateTime|int $date
+     * @throws \InvalidArgumentException
+     * @return a GMT date formatted for use into a HTTP header
+     */
+    protected function formatHttpHeaderDate($date = null) {
+        $format = 'D, j F Y, H:i:s T';
+        if ($date === null) {
+            $date = time();
+        }
+        
+        if (is_a($date, '\\DateTime')) {
+            return gmdate($format, $date->getTimestamp());
+        }
+        else if (is_numeric($date)) {
+            return gmdate($format, $date);
+        }
+        else {
+            throw new \InvalidArgumentException('unsupported date argument type ' . gettype($date));
         }
     }
     
@@ -241,15 +369,37 @@ class DownloadHelper {
      * @param int $start
      * @param int $end
      */
-    protected function outputRangeDownloadHeaders(array $range) {
+    protected function outputRangeDownloadHeaders(array $ranges) {
         
         $this->output->addHeader('HTTP/1.1 206 Partial Content');
         
         $this->outputCommonHeaders();
         
-        $this->output->addHeader('Accept-Ranges: bytes');
-        $this->output->addHeader('Content-Range: bytes ' . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
-        $this->output->addHeader('Content-Length: ' . $range['length']);
+        $totalSize = 0;
+        
+        foreach($ranges as $range) {
+            $totalSize += $range['length'];
+        }
+        
+        $this->output->addHeader('Content-Length: ' . $totalSize);
+        
+        if (count($ranges) > 1) {
+            $this->multipartBoundary = sha1($this->downloadFileName . $this->resource->getSize());
+            $this->multipart = true;
+            $this->output->addHeader('Content-Type: multipart/byteranges; boundary=' . $this->multipartBoundary);
+        }
+        else {
+            $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
+            $this->output->addHeader('Content-Range: bytes ' . $ranges[0]['start'] . '-' . $ranges[0]['end'] . '/' . $this->resource->getSize());
+        }
+    }
+    
+    protected function writeSingleRangeDownloadHeaders(array $range) {
+        $lf = "\r\n";
+        $this->output->write("$lf--" . $this->multipartBoundary);
+        $this->output->write("$lfContent-Type: " . $this->resource->getMime());
+        $this->output->write("$lfContent-Range: bytes " . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
+        $this->output->write("$lf$lf");
     }
     
     /**
@@ -265,6 +415,7 @@ class DownloadHelper {
      */
     protected function outputNonRangeDownloadHeader() {
         $this->output->addHeader('HTTP/1.1 200');
+        $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
         
         $this->outputCommonHeaders();
         
@@ -311,8 +462,15 @@ class DownloadHelper {
      * Outputs the data
      */
     protected function sendData(array $ranges) {
+        
+        if (empty($ranges)) {
+            $size = $this->resource->getSize();
+            $ranges = [
+                ['start' => 0, 'end' => $size - 1, 'length' => $size]
+            ];
+        }
+        
         $offset = 0;
-
         $pos = 0;
         $limit = count($ranges);
         $data = true;
@@ -322,6 +480,10 @@ class DownloadHelper {
             if ($this->readTimeLimit > 0) {
                 // Set the time limit for every read
                 set_time_limit($this->readTimeLimit);
+            }
+            
+            if ($this->multipart) {
+                $this->writeSingleRangeDownloadHeaders($ranges[$pos]);
             }
             
             $data = $this->resource->readBytes($ranges[$pos]['start'], $ranges[$pos]['length']);

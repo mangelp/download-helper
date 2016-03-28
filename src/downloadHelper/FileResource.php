@@ -69,6 +69,26 @@ class FileResource implements IDownloadableResource {
     }
     
     /**
+     *
+     * @var \DateTime
+     */
+    private $lastModifiedDate = null;
+    
+    public function getLastModifiedDate() {
+        return $this->lastModifiedDate;
+    }
+    
+    /**
+     *
+     * @var string
+     */
+    private $entityTag = null;
+    
+    public function getEntityTag() {
+        return $this->entityTag;
+    }
+    
+    /**
      * Initiallizes the path to the file and reads the file size.
      *
      * If the file size cannot be read a RuntimeException will be thrown.
@@ -79,13 +99,15 @@ class FileResource implements IDownloadableResource {
      */
     public function __construct($filePath, $mime = null) {
         
-        $size = filesize($filePath);
+        $fileStat = stat($filePath);
         
-        if ($size === false) {
+        if ($fileStat === false) {
             throw new \RuntimeException("Could not read from file: $filePath");
         }
         
-        $this->size = $size;
+        $this->size = $fileStat['size'];
+        $this->lastModifiedDate = new \DateTime($fileStat['mtime']);
+        $this->entityTag = sha1($filePath . ':' . $fileStat['size'] . '@' . $fileStat['mtime']);
         $this->filePath = $filePath;
         
         if (empty($mime)) {
