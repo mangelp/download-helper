@@ -37,7 +37,7 @@ class HttpRangeHeaderHelper {
             return false;
         }
         
-        $ranges = [];
+        $allRanges = [];
         
         foreach($parameters as $parameter) {
             
@@ -50,43 +50,21 @@ class HttpRangeHeaderHelper {
                 continue;
             }
             
-            $parts = explode(',', $rangeHeaderParts[1]);
+            $ranges = $this->parseRangeHeaderParameterValue($rangeHeaderParts[1], $defaultStart, $defaultEnd);
             
-            foreach($parts as $part) {
-                if ($part == '-') {
-                    return false;
-                }
-            
-                if ($part[0] == '-') {
-                    $part = "$defaultStart$part";
-                }
-                else if (substr($part, -1) == '-') {
-                    $part .= $defaultEnd;
-                }
-            
-                $rangeParts = explode('-', $part);
-            
-                if (count($rangeParts) != 2) {
-                    return false;
-                }
-                
-                $start = (int)$rangeParts[0];
-                $end = (int)$rangeParts[1];
-                $length = $end - $start + 1;
-                
-                if ($start > $end) {
-                    return false;
-                }
-            
-                $ranges[]= ['start' => (int)$rangeParts[0], 'end' => $end, 'length' => $length];
+            // Invalid bytes parameter, ignore it
+            if ($ranges == false) {
+                continue;
             }
+            
+            $allRanges = array_merge($allRanges, $ranges);
         }
         
-        if (empty($ranges)) {
+        if (empty($allRanges)) {
             return false;
         }
         else {
-            usort($ranges, function($ra, $rb){
+            usort($allRanges, function($ra, $rb){
                 $cmp = $ra['start'] - $rb['start'];
                 
                 if ($cmp == 0) {
@@ -95,6 +73,49 @@ class HttpRangeHeaderHelper {
                 
                 return $cmp;
             });
+        }
+        
+        return $allRanges;
+    }
+    
+    /**
+     * Parses a single range parameter value string like "0-12,23-45".
+     *
+     * @param string $headerParameterValue
+     * @param int $defaultStart
+     * @param int $defaultEnd
+     */
+    protected function parseRangeHeaderParameterValue($headerParameterValue, $defaultStart, $defaultEnd) {
+        $parts = explode(',', $headerParameterValue);
+        $ranges = [];
+        
+        foreach($parts as $part) {
+            if ($part == '-') {
+                return false;
+            }
+        
+            if ($part[0] == '-') {
+                $part = "$defaultStart$part";
+            }
+            else if (substr($part, -1) == '-') {
+                $part .= $defaultEnd;
+            }
+        
+            $rangeParts = explode('-', $part);
+        
+            if (count($rangeParts) != 2) {
+                return false;
+            }
+        
+            $start = (int)$rangeParts[0];
+            $end = (int)$rangeParts[1];
+            $length = $end - $start + 1;
+        
+            if ($start > $end) {
+                return false;
+            }
+        
+            $ranges[]= ['start' => (int)$rangeParts[0], 'end' => $end, 'length' => $length];
         }
         
         return $ranges;
