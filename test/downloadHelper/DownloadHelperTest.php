@@ -149,7 +149,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         }
     }
     
-    public function testDownloadedFileRangeBytesByHttpClientTool() {
+    public function testDownloadSingleRangeDataByHttpClientTool() {
         
         if (!$this->existsCommand('curl')) {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
@@ -194,6 +194,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         self::assertCount(1, $dataRead_14_17, "No proper data read: " . print_r($dataRead_14_17, true));
         self::assertEquals('four', $dataRead_14_17[0]);
         
+        // The ranges specify a consecutive set of bytes, so they are downloaded as a single range
         exec('curl -s --header "Range: bytes=8-12,13-15,10-17" ' . $testScript, $dataReadA);
         self::assertCount(2, $dataReadA, "No proper data read: " . print_r($dataReadA, true));
         self::assertEquals(['three', 'four'], $dataReadA);
@@ -221,7 +222,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         self::assertEmpty($dataReadFailed);
     }
     
-    public function testDownloadRangeBytesHeadersByHttpClientTool() {
+    public function testDownloadSingleRangeHeadersByHttpClientTool() {
         
         if (!$this->existsCommand('curl')) {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
@@ -272,9 +273,113 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         ];
         
         $headers = [];
-        exec('curl -s --dump-header - --header "Range: bytes=35-168" ' . $testScript, $headers);
+        exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=35-168" ' . $testScript, $headers);
         
         self::assertNotEmpty($headers);
         self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+        
+        $expectedHeaders = [
+            'HTTP/1.1 206 Partial Content',
+            'Content-Disposition: attachment; filename="foo.txt"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: bytes',
+        ];
+        $headers = [];
+        exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=0-2,8-12" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers));
+    }
+    
+    public function testDownloadMultipleRangeDataByHttpClientTool() {
+    
+        if (!$this->existsCommand('curl')) {
+            self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+    
+        if (!$this->requirePhpWebServer()) {
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
+            return;
+        }
+    
+        $testScript = 'http://' . $this->getPhpServerAddress() . '/fooFileDownload.php';
+        
+        exec('curl -s --header "Range: bytes=0-2,8-12" ' . $testScript, $dataReadA);
+        
+        $expectedOutput = [
+            '',
+            'REPLACEME',
+            'Content-Type: text/plain',
+            'Content-Range: bytes 0-2/18',
+            '',
+            'one',
+            'REPLACEME',
+            'Content-Type: text/plain',
+            'Content-Range: bytes 8-12/18',
+            '',
+            'three',
+        ];
+        
+        self::assertCount(11, $dataReadA, "No proper data read: " . print_r($dataReadA, true));
+        // We cannot predict the separator string, so we simply copy it
+        $expectedOutput[1] = $dataReadA[1];
+        $expectedOutput[6] = $dataReadA[6];
+        self::assertEquals($expectedOutput, $dataReadA);
+    }
+    
+    public function testDownloadMultipleRangeHeadersByHttpClientTool() {
+    
+        if (!$this->existsCommand('curl')) {
+            self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+    
+        if (!$this->requirePhpWebServer()) {
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
+            return;
+        }
+    
+        $testScript = 'http://' . $this->getPhpServerAddress() . '/fooFileDownload.php';
+    
+        $expectedHeaders = [
+            'HTTP/1.1 206 Partial Content',
+            'Content-Disposition: attachment; filename="foo.txt"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: bytes',
+        ];
+        
+        $headers = [];
+        exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=0-2,8-12" ' . $testScript, $headers);
+    
+        self::assertNotEmpty($headers);
+        $intersectedHeaders = array_intersect($expectedHeaders, $headers);
+        self::assertCount(4, $intersectedHeaders);
+        self::assertEquals($expectedHeaders, $intersectedHeaders);
+        
+        $this->assertOneArrayElementStartsBy('Content-Type: multipart/byteranges; boundary=', $headers);
+        $this->assertOneArrayElementStartsBy('Content-Length: ', $headers);
+    }
+    
+    protected function assertOneArrayElementStartsBy($string, array $array) {
+        $found = 0;
+        $length = strlen($string);
+        
+        if ($length == 0) {
+            return;
+        }
+        
+        foreach($array as $key => $item) {
+            if (strlen($item) >= $length && strcasecmp(substr($item, 0, $length), $string) == 0) {
+                ++$found;
+            }
+        }
+        
+        if ($found == 0) {
+            $this->fail('No array value starts with ' . $string);
+        }
+        else if ($found > 1) {
+            $this->fail($found . ' arrays starts with value ' . $string);
+        }
     }
 }

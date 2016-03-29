@@ -121,7 +121,7 @@ class DownloadOutputHelper implements IOutputHelper {
     public function write($data) {
         $this->sendHeaders();
         
-        echo $data;
+        print($data);
         
         return strlen($data);
     }

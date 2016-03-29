@@ -26,6 +26,7 @@ class DownloadHelper {
     
     const CACHE_NEVER = 'never';
     const CACHE_REVALIDATE = 'revalidate';
+    const CACHE_NONE = 'none';
     
     /**
      * @var IDownloadableResource
@@ -181,6 +182,10 @@ class DownloadHelper {
         return $this->multipartBoundary;
     }
     
+    public function setMultipartBoundary($multipartBoundary) {
+        $this->multipartBoundary = $multipartBoundary;
+    }
+    
     /**
      * @var string
      */
@@ -250,6 +255,8 @@ class DownloadHelper {
         $ranges = false;
         $rangeError = false;
         $unsupportedError = false;
+        $this->multipart = false;
+        $this->multipartBoundary = null;
         
         try {
             $ranges = $this->getRanges();
@@ -264,6 +271,9 @@ class DownloadHelper {
         }
         else if (count($ranges) > 1) {
             $this->multipart = true;
+            if (empty($this->multipartBoundary)) {
+                $this->multipartBoundary = $this->generateMultipartBoundary();
+            }
         }
         else if (count($ranges) == 1
                 && $ranges[0]['length'] == $this->resource->getSize()
@@ -377,18 +387,21 @@ class DownloadHelper {
         
         $totalSize = 0;
         
-        foreach($ranges as $range) {
-            $totalSize += $range['length'];
-        }
-        
-        $this->output->addHeader('Content-Length: ' . $totalSize);
-        
         if (count($ranges) > 1) {
-            $this->multipartBoundary = sha1($this->downloadFileName . $this->resource->getSize());
-            $this->multipart = true;
+            foreach($ranges as $range) {
+                $totalSize += 4 + strlen($this->multipartBoundary);
+                $totalSize += 2 + strlen('Content-Type: ') + strlen($this->resource->getMime());
+                $totalSize += 2 + strlen('Content-Range: bytes ') + strlen("{$range['start']}")
+                    + 1 + strlen("{$range['end']}") + 1 + strlen($this->resource->getSize() . "");
+                $totalSize += 4 + $range['length'];
+            }
+            
+            $this->output->addHeader('Content-Length: ' . $totalSize);
             $this->output->addHeader('Content-Type: multipart/byteranges; boundary=' . $this->multipartBoundary);
         }
         else {
+            $totalSize = $ranges[0]['length'];
+            $this->output->addHeader('Content-Length: ' . $totalSize);
             $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
             $this->output->addHeader('Content-Range: bytes ' . $ranges[0]['start'] . '-' . $ranges[0]['end'] . '/' . $this->resource->getSize());
         }
@@ -396,9 +409,9 @@ class DownloadHelper {
     
     protected function writeSingleRangeDownloadHeaders(array $range) {
         $lf = "\r\n";
-        $this->output->write("$lf--" . $this->multipartBoundary);
-        $this->output->write("$lfContent-Type: " . $this->resource->getMime());
-        $this->output->write("$lfContent-Range: bytes " . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
+        $this->output->write("{$lf}--" . $this->multipartBoundary);
+        $this->output->write("{$lf}Content-Type: " . $this->resource->getMime());
+        $this->output->write("{$lf}Content-Range: bytes " . $range['start'] . '-' . $range['end'] . '/' . $this->resource->getSize());
         $this->output->write("$lf$lf");
     }
     
@@ -515,5 +528,9 @@ class DownloadHelper {
         $this->output->addHeader('HTTP/1.1 500 ' . $error);
         $this->output->flush();
         die();
+    }
+    
+    protected function generateMultipartBoundary() {
+        return sha1($this->downloadFileName . time() . rand() . $this->resource->getSize());
     }
 }
