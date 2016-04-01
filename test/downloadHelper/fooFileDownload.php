@@ -19,6 +19,7 @@ $downloadHelper = new DownloadHelper($output, $resource);
 $downloadHelper->setByteRangesEnabled(true);
 $downloadHelper->setDisposition(DownloadHelper::DISPOSITION_ATTACHMENT);
 $downloadHelper->setDownloadFileName('foo.txt');
+$downloadHelper->setCacheMode(DownloadHelper::CACHE_REVALIDATE);
 
 $requestMethod = isset($_SERVER) && isset($_SERVER['REQUEST_METHOD']) ?
     strtolower($_SERVER['REQUEST_METHOD']):

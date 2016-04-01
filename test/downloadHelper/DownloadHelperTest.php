@@ -382,4 +382,50 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
             $this->fail($found . ' arrays starts with value ' . $string);
         }
     }
+    
+    public function testIfModifiedSinceHeader() {
+        if (!$this->existsCommand('curl')) {
+            self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+        
+        if (!$this->requirePhpWebServer()) {
+            self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
+            return;
+        }
+        
+        $sinceStamp = time() - 14800;
+        self::assertTrue(touch(__DIR__ . '/foo.txt', $sinceStamp));
+        
+        $testScript = 'http://' . $this->getPhpServerAddress() . '/fooFileDownload.php';
+        
+        $expectedHeaders = [
+            'HTTP/1.1 206 Partial Content',
+            'Content-Disposition: attachment; filename="foo.txt"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: bytes',
+        ];
+        
+        $headers = [];
+        $httpSinceDate = gmdate("D, d M Y H:i:s T", time());
+        exec('curl -s --dump-header - --header "Range: bytes=0-2,8-12" --header "If-Modified-Since: ' . $httpSinceDate . '" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        $intersectedHeaders = array_intersect($expectedHeaders, $headers);
+        self::assertCount(4, $intersectedHeaders, 'Not expected headers: ' . print_r($headers, true));
+        self::assertEquals($expectedHeaders, $intersectedHeaders);
+        
+        $expectedHeaders = [
+            'HTTP/1.1 304 Not Modified',
+        ];
+        
+        $headers = [];
+        $httpSinceDate = gmdate("D, d M Y H:i:s T", $sinceStamp - 14800);
+        exec('curl -s --dump-header - --header "If-Modified-Since: '. $httpSinceDate . '" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        $intersectedHeaders = array_intersect($expectedHeaders, $headers);
+        self::assertCount(1, $intersectedHeaders, 'Missing headers from: ' . print_r($headers, true));
+        self::assertEquals($expectedHeaders, $intersectedHeaders);
+    }
 }

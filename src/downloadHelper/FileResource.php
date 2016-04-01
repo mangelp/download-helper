@@ -74,6 +74,9 @@ class FileResource implements IDownloadableResource {
      */
     private $lastModifiedDate = null;
     
+    /**
+     * Gets the last modified GMT date
+     */
     public function getLastModifiedDate() {
         return $this->lastModifiedDate;
     }
@@ -106,7 +109,9 @@ class FileResource implements IDownloadableResource {
         }
         
         $this->size = $fileStat['size'];
-        $this->lastModifiedDate = new \DateTime($fileStat['mtime']);
+        $this->lastModifiedDate = new \DateTime();
+        $this->lastModifiedDate->setTimestamp((int)$fileStat['mtime']);
+        $this->lastModifiedDate->setTimezone(new \DateTimeZone('UTC'));
         $this->entityTag = sha1($filePath . ':' . $fileStat['size'] . '@' . $fileStat['mtime']);
         $this->filePath = $filePath;
         

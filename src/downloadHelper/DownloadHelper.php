@@ -16,16 +16,44 @@ namespace mangelp\downloadHelper;
  *  + https://github.com/TimOliver/PHP-Framework-Classes/blob/master/download.class.php
  *  + https://github.com/pomle/php-serveFilePartial/blob/master/ServeFilePartial.inc.php
  *  + https://github.com/diversen/http-send-file
- * HTTP spec reference
+ *
+ * References:
  *  + https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.16
+ *  + http://www.ietf.org/rfc/rfc2616.txt
  */
 class DownloadHelper {
-    
+    /**
+     * Download to client
+     * @var string
+     */
     const DISPOSITION_ATTACHMENT = 'attachment';
+    /**
+     * Open in browser if it has a viewer for the given mime type.
+     * @var string
+     */
     const DISPOSITION_INLINE = 'inline';
     
+    /**
+     * Entirely disable caching of the resource
+     * @var string
+     */
     const CACHE_NEVER = 'never';
+    /**
+     * Set revalidation headers.
+     *
+     * If the resource provides an etag or modification date then the download content will be
+     * revalidated (requires HEAD verb support).
+     *
+     * If the resource does not provides etag or modification date then the resource will not be
+     * cached at all due to the browser not being able to check validity. This case is the same
+     * as setting the cache to 'never'.
+     * @var string
+     */
     const CACHE_REVALIDATE = 'revalidate';
+    /**
+     * Do not use any caching control headers.
+     * @var string
+     */
     const CACHE_NONE = 'none';
     
     /**
@@ -265,6 +293,8 @@ class DownloadHelper {
             $rangeError = true;
         }
         
+        $ifModifiedSinceDate = $this->getIfModifiedHeaderDate();
+        
         // Change range type to match
         if ($ranges === false) {
             $ranges = [];
@@ -283,7 +313,7 @@ class DownloadHelper {
         }
         
         if ($populateHeaders) {
-            $this->populateHeaders($ranges, $rangeError, $unsupportedError);
+            $this->populateHeaders($ranges, $rangeError, $unsupportedError, $ifModifiedSinceDate);
         }
         
         if ($sendData) {
@@ -293,13 +323,54 @@ class DownloadHelper {
         return $ranges;
     }
     
-    protected function populateHeaders($ranges, $rangeError, $unsupportedError) {
+    /**
+     * Parses the If-Modified-Since header date and returns it as a DateTime. It does not allow a
+     * date string that only contains alphabetic characters.
+     *
+     * @return \DateTime|null The parsed date as a DateTime or null if was not present or invalid.
+     */
+    protected function getIfModifiedHeaderDate() {
+        
+        if (!isset($_SERVER) || !isset($_SERVER['HTTP_IF_MODIFIED_SINCE'])) {
+            return null;
+        }
+        
+        $dateStr = trim($_SERVER['HTTP_IF_MODIFIED_SINCE']);
+        
+        if (preg_match('/^[a-zA-Z]$/', $dateStr)) {
+            return null;
+        }
+        
+        $dtime = new \DateTime($dateStr, new \DateTimeZone('GMT'));
+        
+        if ($dtime > new \DateTime()) {
+            return null;
+        }
+        
+        return $dtime;
+    }
+    
+    /**
+     * Populates the headers of the response.
+     *
+     * @param array|false $ranges
+     * @param bool $rangeError
+     * @param bool $unsupportedError
+     * @param \DateTime $ifModifiedSinceDate
+     */
+    protected function populateHeaders($ranges, $rangeError, $unsupportedError, \DateTime $ifModifiedSinceDate = null) {
         
         if ($rangeError) {
             $this->outputBadRangeHeader();
         }
         else if ($unsupportedError) {
             $this->outputError('Not supported');
+        }
+        else if ($ifModifiedSinceDate !== null
+              && $this->resource->getLastModifiedDate() !== null
+              && $ifModifiedSinceDate <= $this->resource->getLastModifiedDate()) {
+            
+            $this->outputNotModifiedHeader();
         }
         else if ($ranges === false || empty($ranges)
                 || (count($ranges) == 1
@@ -358,7 +429,7 @@ class DownloadHelper {
      * @return a GMT date formatted for use into a HTTP header
      */
     protected function formatHttpHeaderDate($date = null) {
-        $format = 'D, j F Y, H:i:s T';
+        $format = 'D, d M Y H:i:s T';
         if ($date === null) {
             $date = time();
         }
@@ -433,6 +504,11 @@ class DownloadHelper {
         $this->outputCommonHeaders();
         
         $this->output->addHeader('Content-Length: ' . $this->resource->getSize());
+    }
+    
+    protected function outputNotModifiedHeader() {
+        $this->output->addHeader('HTTP/1.1 304 Not Modified');
+        $this->end();
     }
     
     /**
