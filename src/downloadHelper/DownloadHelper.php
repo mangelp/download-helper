@@ -575,12 +575,34 @@ class DownloadHelper {
                 $this->writeSingleRangeDownloadHeaders($ranges[$pos]);
             }
             
-            $data = $this->resource->readBytes($ranges[$pos]['start'], $ranges[$pos]['length']);
+            // Length of the data already read from the current range
+            $dataLength = 0;
+            // Target length to read
+            $targetLength = $ranges[$pos]['length'];
             
-            if ($data !== false) {
-                $this->output->write($data);
+            while($data !== false && $dataLength < $ranges[$pos]['length']) {
+                $data = $this->resource->readBytes($ranges[$pos]['start'], $targetLength);
+                
+                if ($data !== false) {
+                    $this->output->write($data);
+                }
+                else {
+                    break;
+                }
+                
+                // Get the length and free the data (set to true to keep the loop going)
+                $readLength = strlen($data);
+                $data = true;
+                
+                if ($readLength < $targetLength) {
+                    // Reduction of the target length after reading a portion of it
+                    $targetLength -= $readLength;
+                }
+                
+                $dataLength += $readLength;
             }
-            else {
+            
+            if ($data === false) {
                 break;
             }
             
