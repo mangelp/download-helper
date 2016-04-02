@@ -22,10 +22,11 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
     private function setRandomPort() {
         $usedPorts = [];
         exec('netstat -ltn4 | grep 127.0.0.1 | cut -d \: -f 2 | cut -d \  -f 1', $usedPorts);
-        $candidatePort = 28800;
+        $candidatePort = mt_rand(12000, 31900);
         
         while(in_array("$candidatePort", $usedPorts)) {
-            ++$candidatePort;
+            $candidatePort = mt_rand(10999, 31999);
+            exec('netstat -ltn4 | grep 127.0.0.1 | cut -d \: -f 2 | cut -d \  -f 1', $usedPorts);
         }
         
         if ($candidatePort < 32000) {
@@ -406,9 +407,21 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
             'Accept-Ranges: bytes',
         ];
         
+        // Test using GET verb
+        
         $headers = [];
         $httpSinceDate = gmdate("D, d M Y H:i:s T", time());
         exec('curl -s --dump-header - --header "Range: bytes=0-2,8-12" --header "If-Modified-Since: ' . $httpSinceDate . '" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        $intersectedHeaders = array_intersect($expectedHeaders, $headers);
+        self::assertCount(4, $intersectedHeaders, 'Not expected headers: ' . print_r($headers, true));
+        self::assertEquals($expectedHeaders, $intersectedHeaders);
+        
+        // Test using HEAD verb
+        
+        $headers = [];
+        exec('curl -s --head --dump-header - --header "Range: bytes=0-2,8-12" --header "If-Modified-Since: ' . $httpSinceDate . '" ' . $testScript, $headers);
         
         self::assertNotEmpty($headers);
         $intersectedHeaders = array_intersect($expectedHeaders, $headers);
@@ -419,9 +432,22 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
             'HTTP/1.1 304 Not Modified',
         ];
         
+        // Test using GET verb
+        
         $headers = [];
         $httpSinceDate = gmdate("D, d M Y H:i:s T", $sinceStamp - 14800);
         exec('curl -s --dump-header - --header "If-Modified-Since: '. $httpSinceDate . '" ' . $testScript, $headers);
+        
+        self::assertNotEmpty($headers);
+        $intersectedHeaders = array_intersect($expectedHeaders, $headers);
+        self::assertCount(1, $intersectedHeaders, 'Missing headers from: ' . print_r($headers, true));
+        self::assertEquals($expectedHeaders, $intersectedHeaders);
+        
+        // Test using HEAD verb
+        
+        $headers = [];
+        $httpSinceDate = gmdate("D, d M Y H:i:s T", $sinceStamp - 14800);
+        exec('curl -s --head --dump-header - --header "If-Modified-Since: '. $httpSinceDate . '" ' . $testScript, $headers);
         
         self::assertNotEmpty($headers);
         $intersectedHeaders = array_intersect($expectedHeaders, $headers);
