@@ -9,15 +9,24 @@
 namespace mangelp\downloadHelper;
 
 /**
- * Outputs all the needed headers and data to download a file throught HTTP.
+ * Outputs all the needed headers and data to download a file throught HTTP protocol.
  *
- * Download helper coded following the next samples and repositories:
+ * This helper does not check the current HTTP verb, but reads the Ranges and HTTP_IF_MODIFIED_SINCE
+ * headers while processing the download.
+ *
+ * Header output can be disabled to allow setting your own headers, but headers set while sending
+ * the data in multi-part downloads cannot be disabled.
+ *
+ * Caching control headers can be also disabled to allow the use of custom ones. The default ones
+ * provided are only must-revalidate and etag/last-modified dates.
+ *
+ * Download helper coded with advice taken from the next samples and repositories:
  *  + http://www.media-division.com/the-right-way-to-handle-file-downloads-in-php/
  *  + https://github.com/TimOliver/PHP-Framework-Classes/blob/master/download.class.php
  *  + https://github.com/pomle/php-serveFilePartial/blob/master/ServeFilePartial.inc.php
  *  + https://github.com/diversen/http-send-file
  *
- * References:
+ * References to have at hand:
  *  + https://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.16
  *  + http://www.ietf.org/rfc/rfc2616.txt
  */
@@ -206,12 +215,26 @@ class DownloadHelper {
     
     private $multipartBoundary = null;
     
+    /**
+     * Get the boundary string used with multipart downloads.
+     *
+     * If this string is needed and not set a random one will be generated.
+     *
+     * @return null|string
+     */
     public function getMultipartBoundary() {
         return $this->multipartBoundary;
     }
     
+    /**
+     * Set the boundary string used with multipart downloads.
+     *
+     * If this string is needed and not set a random one will be generated.
+     *
+     * @param unknown $multipartBoundary
+     */
     public function setMultipartBoundary($multipartBoundary) {
-        $this->multipartBoundary = $multipartBoundary;
+        $this->multipartBoundary = trim($multipartBoundary);
     }
     
     /**
@@ -244,8 +267,8 @@ class DownloadHelper {
     }
     
     /**
-     * Writes the download to the given IOutputHelper implementation along with all the needed
-     * HTTP headers.
+     * Writes the data to the given IOutputHelper implementation along with all the needed HTTP
+     * headers.
      *
      * @throws \RuntimeException
      */
@@ -256,9 +279,10 @@ class DownloadHelper {
     }
     
     /**
-     * Only returns all the headers of the response, but without any data.
-     * This method is intended to be of use responding to HEAD requests over the resource. Web
-     * browsers might make those requests to validate the download for caching purposses.
+     * Only writes all the headers to the IOutputHelper implementation, but without any data.
+     *
+     * This method is intended to be of use responding to HEAD requests over the resource to check
+     * for cache revalidation.
      *
      * @throws \RuntimeException
      */
@@ -300,7 +324,9 @@ class DownloadHelper {
             $ranges = [];
         }
         else if (count($ranges) > 1) {
+            // This is a multi-part download, set the flag and ensure we have a valid boundary
             $this->multipart = true;
+            
             if (empty($this->multipartBoundary)) {
                 $this->multipartBoundary = $this->generateMultipartBoundary();
             }
@@ -405,13 +431,18 @@ class DownloadHelper {
         $this->output->addHeader('Date: ' . $this->formatHttpHeaderDate(time()));
         
         if ($this->cacheMode == self::CACHE_NEVER) {
-            $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-        }
-        else if ($this->cacheMode == self::CACHE_REVALIDATE) {
+            $this->output->addHeader('Pragma: public');
             $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
             
-            // If neither an etag or last modified dates are provided then the must-revalidate cache
-            // control header will cause the resource to be re-downloaded each time.
+            // Setting must-revalidate without etag or last-modified causes the resource to be
+            // redownloaded each time
+        }
+        else if ($this->cacheMode == self::CACHE_REVALIDATE) {
+            $this->output->addHeader('Pragma: public');
+            $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+            
+            // Setting must-revalidate without etag or last-modified causes the resource to be
+            // redownloaded each time
             if ($this->resource->getLastModifiedDate()) {
                 $this->output->addHeader('Last-Modified: ' . $this->formatHttpHeaderDate($this->resource->getLastModifiedDate()));
             }
@@ -478,6 +509,11 @@ class DownloadHelper {
         }
     }
     
+    /**
+     * In case of multi-part downloads we need to write some headers to the output between data
+     * segments.
+     * @param array $range
+     */
     protected function writeSingleRangeDownloadHeaders(array $range) {
         $lf = "\r\n";
         $this->output->write("{$lf}--" . $this->multipartBoundary);
@@ -487,7 +523,7 @@ class DownloadHelper {
     }
     
     /**
-     * Outputs the bad range header
+     * Outputs the bad range header and finishes execution (die).
      */
     protected function outputBadRangeHeader() {
         $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
@@ -506,6 +542,9 @@ class DownloadHelper {
         $this->output->addHeader('Content-Length: ' . $this->resource->getSize());
     }
     
+    /**
+     * Outputs the not modified header and finishes execution (die).
+     */
     protected function outputNotModifiedHeader() {
         $this->output->addHeader('HTTP/1.1 304 Not Modified');
         $this->end();
@@ -548,7 +587,10 @@ class DownloadHelper {
     }
     
     /**
-     * Outputs the data
+     * Outputs the data to the client.
+     *
+     * Takes care of max-chunk reading control, applies time limits before range processing and
+     * controls throttling.
      */
     protected function sendData(array $ranges) {
         
@@ -581,28 +623,35 @@ class DownloadHelper {
             $targetLength = $ranges[$pos]['length'];
             
             while($data !== false && $dataLength < $ranges[$pos]['length']) {
+                // Read the data with the target length
                 $data = $this->resource->readBytes($ranges[$pos]['start'], $targetLength);
                 
                 if ($data !== false) {
                     $this->output->write($data);
                 }
                 else {
+                    // If there is no more data to be read we end this loop here
                     break;
                 }
                 
-                // Get the length and free the data (set to true to keep the loop going)
+                // Get the length and free the data already sent (set to true to keep the loop going)
                 $readLength = strlen($data);
                 $data = true;
                 
+                // Then check if the data read filled the desired size
                 if ($readLength < $targetLength) {
-                    // Reduction of the target length after reading a portion of it
+                    // If the data read size does not fills the length required update the target
+                    // length for the next read.
                     $targetLength -= $readLength;
                 }
                 
+                // Increase the already read data size to check the limit before each read
                 $dataLength += $readLength;
+                $readLength = 0;
             }
             
             if ($data === false) {
+                // If there is no more data to be read we end this loop here
                 break;
             }
             

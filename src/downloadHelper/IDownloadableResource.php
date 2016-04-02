@@ -24,7 +24,7 @@ interface IDownloadableResource {
     
     /**
      * Gets a \DateTime instance with the last modified date or null if this is not supported by
-     * the implementation.
+     * the implementation or not specified.
      *
      * @return \DateTime|null
      */
@@ -32,16 +32,20 @@ interface IDownloadableResource {
     
     /**
      * Gets an string that changes only when the resource has changed or null if this is not
-     * supported by the implementation.
+     * supported by the implementation or not specified.
      *
      * @return string|null
      */
     public function getEntityTag();
     
     /**
-     * Reads the specified number of bytes from the resource from the given offset.
+     * Reads the specified number of bytes from the resource from the given offset with a maximum
+     * number of bytes.
      *
-     * Calling this method without parameters will read the complete resource contents and return it.
+     * Calling this method without parameters will read a chunk of the maximum size and return it.
+     *
+     * The default chunk size depends of each implementation, so it can be a fixed size or nothing.
+     * But the read operation must always honor the $maxChunkSize parameter.
      *
      * @param int $startOffset File offset. Defaults to 0.
      * @param int $length Number of bytes to read. If set to null then the file will be read to
