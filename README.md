@@ -17,12 +17,11 @@ OOP download helper that supports the Range header to allow downloads to be resu
  * Set a time limit before each segment download and reset it to the default after segment data 
    output ends.
  * Multi-part download (multipart/byteranges).
+ * Data output throttling to a given amount of bytes per second.
 
 ## What is not supported? ##
 
- * Throttling.
  * Real-world usage (not tested in production environments).
- * Anything else not listed as supported.
 
 ## Alternatives ##
 
