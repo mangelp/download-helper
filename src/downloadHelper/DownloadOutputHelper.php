@@ -133,4 +133,8 @@ class DownloadOutputHelper implements IOutputHelper {
         @ob_flush();
         @flush();
     }
+    
+    public function end() {
+        die();
+    }
 }

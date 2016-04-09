@@ -258,6 +258,33 @@ class DownloadHelper {
         $this->cacheMode = $cacheMode;
     }
     
+    /**
+     * @var int
+     */
+    private $maxBytesPerSecond = 0;
+
+    /**
+     * Gets the maximum number of bytes to output per second
+     *
+     * A number less than 1 will disable this feature.
+     *
+     * @return int
+     */
+    public function getMaxBytesPerSecond()  {
+        return $this->maxBytesPerSecond;
+    }
+
+    /**
+     * Sets the maximum number of bytes to output per second.
+     *
+     * A number less than 1 will disable this feature.
+     *
+     * @param int $maxBytesPerSecond
+     */
+    public function setMaxBytesPerSecond($maxBytesPerSecond) {
+        $this->maxBytesPerSecond = (int)$maxBytesPerSecond;
+    }
+    
     public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
         $this->output = $output;
         
@@ -402,6 +429,7 @@ class DownloadHelper {
                 || (count($ranges) == 1
                     && $ranges[0]['start'] == 0
                     && $ranges[0]['length'] == $this->resource->getSize())) {
+            
             $this->outputNonRangeDownloadHeader();
         }
         else {
@@ -523,7 +551,7 @@ class DownloadHelper {
     }
     
     /**
-     * Outputs the bad range header and finishes execution (die).
+     * Outputs the bad range header and finishes execution
      */
     protected function outputBadRangeHeader() {
         $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
@@ -543,7 +571,7 @@ class DownloadHelper {
     }
     
     /**
-     * Outputs the not modified header and finishes execution (die).
+     * Outputs the not modified header and finishes execution
      */
     protected function outputNotModifiedHeader() {
         $this->output->addHeader('HTTP/1.1 304 Not Modified');
@@ -587,6 +615,19 @@ class DownloadHelper {
     }
     
     /**
+     * Gets the diference in microseconds between two Unix timestamps with microseconds obtained
+     * from microtime(true).
+     *
+     * $before must be always less than or equals than $after
+     *
+     * @param float $before Unix time with microseconds
+     * @param float $after Unix time with microseconds
+     */
+    private function getMicrotimeDiff($before, $after) {
+        return (int)round(($after * 1000000) - ($before * 1000000), 0);
+    }
+    
+    /**
      * Outputs the data to the client.
      *
      * Takes care of max-chunk reading control, applies time limits before range processing and
@@ -621,10 +662,21 @@ class DownloadHelper {
             $dataLength = 0;
             // Target length to read
             $targetLength = $ranges[$pos]['length'];
+            // Previous loop end time
+            $endTime = microtime(true);
+            // Current loop start time
+            $startTime = 0;
             
             while($data !== false && $dataLength < $ranges[$pos]['length']) {
+                $startTime = microtime(true);
+                $iterationTargetLength = $targetLength;
+                
+                if ($this->maxBytesPerSecond > 0 && $this->maxBytesPerSecond < $iterationTargetLength) {
+                    $iterationTargetLength = $this->maxBytesPerSecond;
+                }
+                
                 // Read the data with the target length
-                $data = $this->resource->readBytes($ranges[$pos]['start'], $targetLength);
+                $data = $this->resource->readBytes($ranges[$pos]['start'], $iterationTargetLength);
                 
                 if ($data !== false) {
                     $this->output->write($data);
@@ -648,6 +700,23 @@ class DownloadHelper {
                 // Increase the already read data size to check the limit before each read
                 $dataLength += $readLength;
                 $readLength = 0;
+                
+                if ($this->maxBytesPerSecond > 0) {
+                    // Must send output to client before sleep
+                    $this->output->flush();
+                    // Sleep for 1000000 microseconds but take account of the time we might have
+                    // spent waiting between loops
+                    
+                    // $endTime <= $startTime always
+                    $dif = (int)round(($startTime * 1000000) - ($endTime * 1000000), 0);
+                    $sleepTime = 1000000 - $dif;
+                    
+                    usleep($sleepTime);
+                }
+                
+                // The difference between the time when the loop finishes and the time when it
+                // starts is substracted from the 1 second base sleep time, for better accuracy.
+                $endTime = microtime(true);
             }
             
             if ($data === false) {
@@ -668,13 +737,13 @@ class DownloadHelper {
      */
     protected function end() {
         $this->output->flush();
-        die();
+        $this->output->end();
     }
     
     protected function outputError($error) {
         $this->output->addHeader('HTTP/1.1 500 ' . $error);
         $this->output->flush();
-        die();
+        $this->output->end();
     }
     
     protected function generateMultipartBoundary() {

@@ -7,6 +7,7 @@
  */
 
 $path = dirname(__DIR__) . '/src/downloadHelper';
+$pathTest = dirname(__DIR__) . '/test/downloadHelper';
 $composerAutoloadPath = dirname(__DIR__) . '/vendor/autoload.php';
 
 include $composerAutoloadPath;
@@ -18,3 +19,6 @@ include "$path/StringResource.php";
 include "$path/DownloadOutputHelper.php";
 include "$path/HttpRangeHeaderHelper.php";
 include "$path/DownloadHelper.php";
+
+include "$pathTest/RandomFileResource.php";
+include "$pathTest/OutputStorageHelper.php";

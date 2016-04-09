@@ -89,4 +89,9 @@ interface IOutputHelper {
      * flushing the output.
      */
     public function flush();
+    
+    /**
+     * Ends sending output.
+     */
+    public function end();
 }
