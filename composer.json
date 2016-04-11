@@ -1,6 +1,7 @@
 {
     "name": "mangelp/download-helper",
     "description": "PSR-4 HTTP download helper with support for Range headers",
+    "version": "0.1-dev",
     "type": "aeifjaoefjiaoefj",
     "require": {
     },
