@@ -58,4 +58,6 @@ class OutputStorageHelper implements IOutputHelper {
     public function flush() {}
     
     public function end() {}
+    
+    public function isOutputClosed() { return false; }
 }

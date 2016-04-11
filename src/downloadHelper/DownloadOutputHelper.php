@@ -17,7 +17,19 @@ namespace mangelp\downloadHelper;
  * problems with the download.
  */
 class DownloadOutputHelper implements IOutputHelper {
+    
+    private $outputClosed = false;
+    
+    public function isOutputClosed() {
+        return $this->outputClosed;
+    }
 
+    /**
+     * Initiallizes the instance
+     *
+     * @param string $clearOutputBuffers
+     * @param string $disableOutputCompression
+     */
     public function __construct($clearOutputBuffers = true, $disableOutputCompression = true) {
         if ($clearOutputBuffers) {
             $this->clearOutputBuffers();
@@ -94,7 +106,7 @@ class DownloadOutputHelper implements IOutputHelper {
      * This method only sends the headers the first time, subsequent calls will do nothing.
      */
     protected function sendHeaders() {
-        if ($this->headersDisabled || $this->headersSent) {
+        if ($this->headersDisabled || $this->headersSent || $this->outputClosed) {
             return;
         }
         
@@ -113,15 +125,17 @@ class DownloadOutputHelper implements IOutputHelper {
         $this->headersSent = true;
     }
     
-    /**
-     *
-     * {@inheritDoc}
-     * @see \mangelp\downloadHelper\IOutputHelper::write()
-     */
     public function write($data) {
+        
         $this->sendHeaders();
         
         print($data);
+        
+        // We need to check connection availability after writting to the end point.
+        if (connection_aborted()) {
+            $this->outputClosed = true;
+            throw new ConnectionAbortedErrorException('Output stream already closed');
+        }
         
         return strlen($data);
     }

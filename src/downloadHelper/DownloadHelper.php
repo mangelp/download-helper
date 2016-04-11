@@ -285,6 +285,8 @@ class DownloadHelper {
         $this->maxBytesPerSecond = (int)$maxBytesPerSecond;
     }
     
+    
+    
     public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
         $this->output = $output;
         
@@ -298,6 +300,7 @@ class DownloadHelper {
      * headers.
      *
      * @throws \RuntimeException
+     * @throws \ErrorException When the connection is aborted
      */
     public function download() {
         $this->processDownload(true, true);
@@ -312,6 +315,7 @@ class DownloadHelper {
      * for cache revalidation.
      *
      * @throws \RuntimeException
+     * @throws \ErrorException When the connection is aborted
      */
     public function headers() {
         
@@ -632,6 +636,8 @@ class DownloadHelper {
      *
      * Takes care of max-chunk reading control, applies time limits before range processing and
      * controls throttling.
+     *
+     * It will never throw exceptions.
      */
     protected function sendData(array $ranges) {
         
@@ -647,15 +653,23 @@ class DownloadHelper {
         $limit = count($ranges);
         $data = true;
         $previousTimeLimit = ini_get('max_execution_time');
+        $aborted = false;
         
-        while($data !== false && $pos < $limit) {
+        while($data !== false && $pos < $limit && !$aborted) {
             if ($this->readTimeLimit > 0) {
                 // Set the time limit for every read
                 set_time_limit($this->readTimeLimit);
             }
             
             if ($this->multipart) {
-                $this->writeSingleRangeDownloadHeaders($ranges[$pos]);
+                try {
+                    $this->writeSingleRangeDownloadHeaders($ranges[$pos]);
+                }
+                catch (ConnectionAbortedErrorException $caeex) {
+                    // Connection aborted
+                    $aborted = true;
+                    break;
+                }
             }
             
             // Length of the data already read from the current range
@@ -667,7 +681,7 @@ class DownloadHelper {
             // Current loop start time
             $startTime = 0;
             
-            while($data !== false && $dataLength < $ranges[$pos]['length']) {
+            while($data !== false && $dataLength < $ranges[$pos]['length'] && !$aborted) {
                 $startTime = microtime(true);
                 $iterationTargetLength = $targetLength;
                 
@@ -679,7 +693,15 @@ class DownloadHelper {
                 $data = $this->resource->readBytes($ranges[$pos]['start'], $iterationTargetLength);
                 
                 if ($data !== false) {
-                    $this->output->write($data);
+                    try {
+                        $this->output->write($data);
+                    }
+                    catch (ConnectionAbortedErrorException $caeex) {
+                        // Connection aborted
+                        $aborted = true;
+                        break;
+                    }
+                    
                 }
                 else {
                     // If there is no more data to be read we end this loop here

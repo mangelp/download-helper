@@ -75,6 +75,7 @@ interface IOutputHelper {
      *
      * @param string $data
      * @throws \RuntimeException if the headers have been already sent by PHP
+     * @throws ConnectionAbortedErrorException if the connection have been aborted
      * @return int number of bytes written
      */
     public function write($data);
@@ -94,4 +95,11 @@ interface IOutputHelper {
      * Ends sending output.
      */
     public function end();
+    
+    /**
+     * Returns true if the output stream is closed and any write operation will fail.
+     *
+     * It will return true only if the connection have been aborted or terminated.
+     */
+    public function isOutputClosed();
 }
