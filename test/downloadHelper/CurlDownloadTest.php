@@ -218,7 +218,7 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
             'Cache-Control: must-revalidate, post-check=0, pre-check=0',
             'Content-Disposition: attachment; filename="foo.txt"',
             'Content-Transfer-Encoding: binary',
-            'Content-type: text/plain;charset=UTF-8',
+            'Content-Type: text/plain; charset=us-ascii',
             'Accept-Ranges: bytes',
             'Content-Length: 18',
         ];
@@ -227,13 +227,14 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
         exec('curl -s -o /dev/null --dump-header - ' . $testScript, $headers);
     
         self::assertNotEmpty($headers);
+        self::assertOneArrayElementStartsBy('Content-type: text/plain', $headers);
         self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers), "Received headers: " . print_r($headers, true));
     
         $expectedHeaders = [
             'HTTP/1.1 206 Partial Content',
             'Content-Disposition: attachment; filename="foo.txt"',
             'Content-Transfer-Encoding: binary',
-            'Content-type: text/plain;charset=UTF-8',
+            'Content-Type: text/plain; charset=us-ascii',
             'Accept-Ranges: bytes',
             'Content-Range: bytes 0-2/18',
             'Content-Length: 3',
@@ -243,6 +244,7 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
         exec('curl -s -o /dev/null --dump-header - --header "Range: bytes=0-2" ' . $testScript, $headers);
     
         self::assertNotEmpty($headers);
+        self::assertOneArrayElementStartsBy('Content-type: text/plain', $headers);
         self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $headers), "Received headers: " . print_r($headers, true));
     
         $expectedHeaders = [
@@ -292,12 +294,12 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
         $expectedOutput = [
             '',
             'REPLACEME',
-            'Content-Type: text/plain',
+            'Content-Type: text/plain; charset=us-ascii',
             'Content-Range: bytes 0-2/18',
             '',
             'one',
             'REPLACEME',
-            'Content-Type: text/plain',
+            'Content-Type: text/plain; charset=us-ascii',
             'Content-Range: bytes 8-12/18',
             '',
             'three',

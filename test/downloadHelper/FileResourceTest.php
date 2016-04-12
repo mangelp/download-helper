@@ -34,7 +34,7 @@ class FileResourceTest extends \PHPUnit_Framework_TestCase {
     
     public function testFileProperties() {
         self::assertEquals(__DIR__ . '/foo.txt', $this->fileResource->getFileName());
-        self::assertEquals('text/plain', $this->fileResource->getMime());
+        self::assertEquals('text/plain; charset=us-ascii', $this->fileResource->getMime());
         self::assertEquals(18, $this->fileResource->getSize());
         self::assertNotEmpty($this->fileResource->getLastModifiedDate());
         self::assertNotEmpty($this->fileResource->getEntityTag());

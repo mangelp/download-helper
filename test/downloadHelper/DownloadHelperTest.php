@@ -25,6 +25,7 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         $output = new OutputStorageHelper();
         $resource = new RandomFileResource(4092);
         $this->downloadHelper = new DownloadHelper($output, $resource);
+        $this->downloadHelper->setDownloadFileName('random.bin');
     }
     
     public function testProperties() {
@@ -102,5 +103,112 @@ class DownloadHelperTest extends \PHPUnit_Framework_TestCase {
         self::assertEquals($resource->getSize(), $output->getSize());
         self::assertGreaterThanOrEqual($minExpectedSeconds, $diference, "Expected than $diference were greater than or equal that $minExpectedSeconds");
         self::assertGreaterThanOrEqual($minExpectedSeconds + 2, $diference, "Expected than $diference were less than or equal that " . ($minExpectedSeconds + 2));
+    }
+    
+    public function testHeadersDispositionAttachment() {
+        $resource = RandomFileResource::cast($this->downloadHelper->getResource());
+        $output = OutputStorageHelper::cast($this->downloadHelper->getOutput());
+        
+        $this->downloadHelper->setDisposition(DownloadHelper::DISPOSITION_ATTACHMENT);
+        $this->downloadHelper->headers();
+        
+        self::assertNotEmpty($output->getHeaders());
+        
+        $expectedHeaders = [
+            'HTTP/1.1 200 Data download OK',
+            'Content-Disposition: attachment; filename="random.bin"',
+        ];
+        
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $output->getHeaders()));
+    }
+    
+    public function testHeadersInline() {
+        $resource = RandomFileResource::cast($this->downloadHelper->getResource());
+        $output = OutputStorageHelper::cast($this->downloadHelper->getOutput());
+    
+        $this->downloadHelper->setDisposition(DownloadHelper::DISPOSITION_INLINE);
+        $this->downloadHelper->headers();
+    
+        self::assertNotEmpty($output->getHeaders());
+    
+        $expectedHeaders = [
+            'HTTP/1.1 200 Data download OK',
+            'Content-Disposition: inline; filename="random.bin"',
+        ];
+    
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $output->getHeaders()));
+    }
+    
+    public function testHeadersNoneCaching() {
+        $resource = RandomFileResource::cast($this->downloadHelper->getResource());
+        $output = OutputStorageHelper::cast($this->downloadHelper->getOutput());
+    
+        $this->downloadHelper->setCacheMode(DownloadHelper::CACHE_NONE);
+        $this->downloadHelper->headers();
+    
+        self::assertNotEmpty($output->getHeaders());
+    
+        $expectedHeaders = [
+            'HTTP/1.1 200 Data download OK',
+            'Content-Type: application/octect-stream',
+            'Content-Disposition: attachment; filename="random.bin"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: none',
+            'Content-Length: 4092',
+        ];
+    
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $output->getHeaders()));
+    }
+    
+    public function testHeadersNeverCaching() {
+        $resource = RandomFileResource::cast($this->downloadHelper->getResource());
+        $output = OutputStorageHelper::cast($this->downloadHelper->getOutput());
+        
+        $this->downloadHelper->setCacheMode(DownloadHelper::CACHE_NEVER);
+        $this->downloadHelper->headers();
+        
+        self::assertNotEmpty($output->getHeaders());
+        
+        $expectedHeaders = [
+            'HTTP/1.1 200 Data download OK',
+            'Content-Type: application/octect-stream',
+            'Content-Disposition: attachment; filename="random.bin"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: none',
+            'Pragma: private',
+            'Cache-control: private',
+            'Expires: Thu, 01 Jan 1970 00:00:00 GMT',
+            'Content-Length: 4092',
+        ];
+        
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $output->getHeaders()));
+    }
+    
+    public function testHeadersRevalidateCaching() {
+        $curDateTime = new \DateTime();
+        $resource = RandomFileResource::cast($this->downloadHelper->getResource());
+        $resource->setLastModifiedDate($curDateTime);
+        $resource->setEntityTag('01ThisIsATest10');
+        $output = OutputStorageHelper::cast($this->downloadHelper->getOutput());
+        
+        $this->downloadHelper->setCacheMode(DownloadHelper::CACHE_REVALIDATE);
+        $this->downloadHelper->headers();
+        
+        self::assertNotEmpty($output->getHeaders());
+        
+        $expectedHeaders = [
+            'HTTP/1.1 200 Data download OK',
+            'Content-Type: application/octect-stream',
+            'Content-Disposition: attachment; filename="random.bin"',
+            'Content-Transfer-Encoding: binary',
+            'Accept-Ranges: none',
+            'Pragma: public',
+            'Cache-Control: must-revalidate, post-check=0, pre-check=0',
+            'Last-Modified: ' . gmdate('D, d M Y H:i:s T', $curDateTime->getTimestamp()),
+            'ETag: 01ThisIsATest10',
+            'Content-Length: 4092',
+        ];
+        
+        self::assertEquals($expectedHeaders, array_intersect($expectedHeaders, $output->getHeaders()));
     }
 }

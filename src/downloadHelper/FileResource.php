@@ -116,8 +116,8 @@ class FileResource implements IDownloadableResource {
         $this->filePath = $filePath;
         
         if (empty($mime)) {
-            $finfod = finfo_open(FILEINFO_MIME_TYPE);
-            $mime = finfo_file($finfod, $this->filePath);
+            $finfod = finfo_open();
+            $mime = finfo_file($finfod, $this->filePath, FILEINFO_MIME);
             finfo_close($finfod);
         }
         

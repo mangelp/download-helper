@@ -31,14 +31,14 @@ class RandomFileResource implements IDownloadableResource {
         $this->size = (int)$size;
     }
     
-    private $mime = null;
+    private $mime = 'application/octect-stream';
 
     public function getMime()  {
         return $this->mime;
     }
 
     public function setMime($mime) {
-        $this->mime = $mime;
+        throw new \RuntimeException('Mime cannot be changed');
     }
 
     private $lastModifiedDate = null;

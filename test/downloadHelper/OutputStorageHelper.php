@@ -44,11 +44,17 @@ class OutputStorageHelper implements IOutputHelper {
     
     public function areHeadersSent() { return false; }
     
-    public function addHeader($text) {}
+    private $headers = [];
     
-    public function getHeaders() { return []; }
+    public function addHeader($text) {
+        $this->headers[]= $text;
+    }
     
-    public function clearHeaders() {}
+    public function getHeaders() { return $this->headers; }
+    
+    public function clearHeaders() {
+        $this->headers = [];
+    }
     
     public function write($data) {
         $this->size += strlen($data);

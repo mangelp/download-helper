@@ -285,8 +285,6 @@ class DownloadHelper {
         $this->maxBytesPerSecond = (int)$maxBytesPerSecond;
     }
     
-    
-    
     public function __construct(IOutputHelper $output, IDownloadableResource $resource = null) {
         $this->output = $output;
         
