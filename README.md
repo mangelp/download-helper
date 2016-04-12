@@ -1,4 +1,6 @@
-# README - download-helper #
+[![Build Status](https://travis-ci.org/mangelp/download-helper.svg?branch=master)](https://travis-ci.org/mangelp/download-helper)
+
+# PHP download-helper  #
 
 ## What is this repository for? ##
 
