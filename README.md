@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/mangelp/download-helper.svg?branch=master)](https://travis-ci.org/mangelp/download-helper)
+https://img.shields.io/badge/PHP-5.5%2C%205.6%2C%207.0-blue.svg
 
 # PHP download-helper  #
 
@@ -36,10 +37,23 @@ not an option you can take a look at these repos that I checked while writting m
 
 ## Testing ##
 
-PHPUnit is a development dependency but you will also need to have curl installed to run the tests.
-Some tests start the built-in php webserver with a random port between 10999 and31999 and will try 
-to download a test file and the headers using curl.
+PHPUnit is a development dependency but you will also need to have curl and netstat commands 
+installed to run the tests as some tests start the built-in php webserver with a random port 
+between 10999 and31999 and will try to download a test file and check the headers.
 
+You can start the tests with any of the next commands from the root folder of this project:
+
+```bash
+phpunit --config test/phpunit.xml
+```
+
+```bash
+vendor/bin/phpunit --config test/phpunit.xml
+```
+
+## PHP versions supported ##
+
+This library only works with PHP 5.5, 5.6 and 7.0
 
 ## TODO ##
 
