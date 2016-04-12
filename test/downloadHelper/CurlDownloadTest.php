@@ -122,6 +122,11 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
             return;
         }
+        
+        if (!$this->existsCommand('netstat')) {
+            self::markTestSkipped('netstat is required to start a random PHP built-in webserver');
+            return;
+        }
     
         if (!$this->requirePhpWebServer()) {
             self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
@@ -195,6 +200,11 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
             return;
         }
+        
+        if (!$this->existsCommand('netstat')) {
+            self::markTestSkipped('netstat is required to start a random PHP built-in webserver');
+            return;
+        }
     
         if (!$this->requirePhpWebServer()) {
             self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
@@ -262,6 +272,11 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
     
         if (!$this->existsCommand('curl')) {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+        
+        if (!$this->existsCommand('netstat')) {
+            self::markTestSkipped('netstat is required to start a random PHP built-in webserver');
             return;
         }
     
@@ -355,6 +370,11 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
             return;
         }
+        
+        if (!$this->existsCommand('netstat')) {
+            self::markTestSkipped('netstat is required to start a random PHP built-in webserver');
+            return;
+        }
     
         if (!$this->requirePhpWebServer()) {
             self::markTestSkipped('The PHP built-in server could not be started and this test will not be run without it');
@@ -424,6 +444,11 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
     public function testDownloadThrotling() {
         if (!$this->existsCommand('curl')) {
             self::markTestSkipped('Curl is required to test HTTP client download with range headers');
+            return;
+        }
+        
+        if (!$this->existsCommand('netstat')) {
+            self::markTestSkipped('netstat is required to start a random PHP built-in webserver');
             return;
         }
     
