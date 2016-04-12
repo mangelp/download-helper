@@ -4,6 +4,7 @@ php:
   - '5.6'
   - '7.0'
 script: phpunit --configuration ./test/phpunit.xml
+sudo: true
 install:
-  - apt-get update -qq
-  - apt-get install -y net-tools curl
+  - sudo apt-get update
+  - sudo apt-get install -y net-tools curl
