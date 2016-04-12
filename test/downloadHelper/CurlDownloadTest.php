@@ -204,7 +204,7 @@ class CurlDownloadTest extends \PHPUnit_Framework_TestCase {
         $testScript = 'http://' . $this->getPhpServerAddress() . '/fooFileDownload.php';
     
         $expectedHeaders = [
-            'HTTP/1.1 200',
+            'HTTP/1.1 200 Data download OK',
             'Cache-Control: must-revalidate, post-check=0, pre-check=0',
             'Content-Disposition: attachment; filename="foo.txt"',
             'Content-Transfer-Encoding: binary',

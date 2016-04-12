@@ -463,11 +463,9 @@ class DownloadHelper {
         $this->output->addHeader('Date: ' . $this->formatHttpHeaderDate(time()));
         
         if ($this->cacheMode == self::CACHE_NEVER) {
-            $this->output->addHeader('Pragma: public');
-            $this->output->addHeader('Cache-Control: must-revalidate, post-check=0, pre-check=0');
-            
-            // Setting must-revalidate without etag or last-modified causes the resource to be
-            // redownloaded each time
+            $this->output->addHeader('Pragma: private');
+            $this->output->addHeader('Cache-control: private');
+            $this->output->addHeader('Expires: ' . $this->formatHttpHeaderDate(0));
         }
         else if ($this->cacheMode == self::CACHE_REVALIDATE) {
             $this->output->addHeader('Pragma: public');
@@ -508,6 +506,14 @@ class DownloadHelper {
         }
     }
     
+    protected function addResponseCodeHeader($code, $message) {
+        $protocol = isset($_SERVER) && isset($_SERVER['SERVER_PROTOCOL']) ?
+            $_SERVER['SERVER_PROTOCOL'] :
+            'HTTP/1.1';
+        
+        $this->output->addHeader("$protocol $code $message");
+    }
+    
     /**
      * Outputs the headers to return a single data range. Multiple data ranges are not supported
      * @param int $start
@@ -515,7 +521,7 @@ class DownloadHelper {
      */
     protected function outputRangeDownloadHeaders(array $ranges) {
         
-        $this->output->addHeader('HTTP/1.1 206 Partial Content');
+        $this->addResponseCodeHeader(206, 'Partial Content');
         
         $this->outputCommonHeaders();
         
@@ -558,7 +564,7 @@ class DownloadHelper {
      * Outputs the bad range header and finishes execution
      */
     protected function outputBadRangeHeader() {
-        $this->output->addHeader('HTTP/1.1 416 Requested Range Not Satisfiable');
+        $this->output->addHeader($_SERVER["SERVER_PROTOCOL"] . ' 416 Requested Range Not Satisfiable');
         $this->end();
     }
     
@@ -566,7 +572,7 @@ class DownloadHelper {
      * Outputs headers to return the full file
      */
     protected function outputNonRangeDownloadHeader() {
-        $this->output->addHeader('HTTP/1.1 200');
+        $this->addResponseCodeHeader(200, 'Data download OK');
         $this->output->addHeader('Content-Type: ' . $this->resource->getMime());
         
         $this->outputCommonHeaders();
@@ -578,7 +584,7 @@ class DownloadHelper {
      * Outputs the not modified header and finishes execution
      */
     protected function outputNotModifiedHeader() {
-        $this->output->addHeader('HTTP/1.1 304 Not Modified');
+        $this->addResponseCodeHeader(304, 'Not Modified');
         $this->end();
     }
     
@@ -763,7 +769,7 @@ class DownloadHelper {
     }
     
     protected function outputError($error) {
-        $this->output->addHeader('HTTP/1.1 500 ' . $error);
+        $this->output->addHeader($_SERVER["SERVER_PROTOCOL"] . ' 500 ' . $error);
         $this->output->flush();
         $this->output->end();
     }
