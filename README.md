@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.org/mangelp/download-helper.svg?branch=master)](https://travis-ci.org/mangelp/download-helper)
-https://img.shields.io/badge/PHP-5.5%2C%205.6%2C%207.0-blue.svg
+![Supports PHP 5.5, 5.6 and 7.0](https://img.shields.io/badge/PHP-5.5%2C%205.6%2C%207.0-blue.svg)
 
 # PHP download-helper  #
 
