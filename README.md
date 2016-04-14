@@ -55,9 +55,18 @@ vendor/bin/phpunit --config test/phpunit.xml
 
 This library only works with PHP 5.5, 5.6 and 7.0
 
+## LICENSE ##
+
+This library is provided free of charge under the terms of Mozilla Public License 2.0
+
+```
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this file,
+You can obtain one at http://mozilla.org/MPL/2.0/.
+```
+
 ## TODO ##
 
  * If pecl http extension is available use it. 
  * Real-world testing.
- 
  
