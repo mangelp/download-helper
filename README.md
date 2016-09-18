@@ -12,7 +12,7 @@ OOP download helper that supports the Range header to allow downloads to be resu
  * Download-related headers: Range, If-Modified-Since.
  * Download of files and data stored in memory.
  * Specify a maximum size in file read operations to control memory usage when downloading. 
- * Decouple implementation of output writting (IOutputHelper) and resource reading 
+ * Decoupled implementation of output writting (IOutputHelper) and resource reading 
    (IDownloadableResource) as separate interfaces with default implementations for standard script
    output (echo) and reading from files and strings.
  * Set headers to control caching and modification validation by optional use of etag and las
@@ -39,7 +39,7 @@ not an option you can take a look at these repos that I checked while writting m
 
 PHPUnit is a development dependency but you will also need to have curl and netstat commands 
 installed to run the tests as some tests start the built-in php webserver with a random port 
-between 10999 and31999 and will try to download a test file and check the headers.
+between 10999 and 31999 and will try to download a test file and check the headers.
 
 You can start the tests with any of the next commands from the root folder of this project:
 
